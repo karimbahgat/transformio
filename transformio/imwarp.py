@@ -8,7 +8,7 @@ import urllib
 from . import transforms
 
 
-def imbounds(width, height, transform, gridsamples=20):
+def imbounds(width, height, transform):
     # calc output bounds based on transforming source image pixel edges and diagonal distance, ala GDAL
     # TODO: alternatively based on internal grid or just all the pixels
     # see https://github.com/OSGeo/gdal/blob/60d8a9ca09c466225508cb82e30a64aefa899a41/gdal/alg/gdaltransformer.cpp#L135
@@ -18,32 +18,28 @@ def imbounds(width, height, transform, gridsamples=20):
     # and can be noticably different than the forward transform, thus miscalculating the bounds
     # TODO: maybe need a fix somehow...
 
-    imw,imh = width, height
-    pixels = []
-    
-    if gridsamples:
-        # get sample pixels at intervals
-        for row in range(0, imh+1, imh//gridsamples):
-            for col in range(0, imw+1, imw//gridsamples):
-                pixels.append((col,row))
-        
-        # ensure we get top and bottom edges
-        for row in [0, imh+1]: # +1 to incl bottom of last row
-            for col in range(0, imw+1, imw//gridsamples): # +1 to incl right of last column, ca 20 points along
-                pixels.append((col,row))
+    # get sample pixels at intervals
+    imw,imh = width,height
+    cols = np.linspace(0, imw-1, 100)
+    rows = np.linspace(0, imh-1, 100)
+    cols,rows = np.meshgrid(cols, rows)
+    cols,rows = cols.flatten(), rows.flatten()
 
-        # ensure we get left and right edges
-        for col in [0, imw+1]: # +1 to incl right of last column
-            for row in range(0, imh+1, imh//gridsamples): # +1 to incl bottom of last row, ca 20 points along
-                pixels.append((col,row))
-
-    else:
-        for row in range(0, imh+1):
-            for col in range(0, imw+1):
-                pixels.append((col,row))
-
-    print(len(pixels))
-    cols,rows = zip(*pixels)
+    # ensure we get every pixel along edges
+    allxs = np.linspace(0, imw-1, imw)
+    allys = np.linspace(0, imh-1, imh)
+    # top
+    cols = np.append(cols, allxs)
+    rows = np.append(rows, np.zeros(allxs.shape))
+    # bottom
+    cols = np.append(cols, allxs)
+    rows = np.append(rows, np.zeros(allxs.shape)*imh)
+    # left
+    cols = np.append(cols, np.zeros(allys.shape))
+    rows = np.append(rows, allys)
+    # right
+    cols = np.append(cols, np.zeros(allys.shape)*imw)
+    rows = np.append(rows, allys)
 
     # transform and get bounds
     predx,predy = transform.predict(cols, rows)
@@ -65,13 +61,15 @@ def imbounds(width, height, transform, gridsamples=20):
 
     return xmin,ymin,xmax,ymax
 
-def warp(im, transform, invtransform, resample='nearest', maxdim=None, crs=None):
+def warp(im, transform, invtransform, resample='nearest', maxdim=None, fromcrs=None, tocrs=None):
     # check if im is url
     if isinstance(im, str) and im.startswith('http'):
         print('getting image from url')
         url = im
         fobj = io.BytesIO(urllib.request.urlopen(url).read())
         im = PIL.Image.open(fobj)
+
+
 
     # ensure correct im mode
     if not im.mode == 'RGBA':
@@ -112,11 +110,9 @@ def warp(im, transform, invtransform, resample='nearest', maxdim=None, crs=None)
 
 
 
-    # add in reproj EPSG 4326 -> EPSG X
-    if crs:
+    # add in reproj
+    if fromcrs and tocrs:
         # forward
-        fromcrs = '+init=epsg:4326' # this is the immediate coordsys of the transform estimation
-        tocrs = '+init=epsg:' + crs
         crstrans = transforms.Projection(fromcrs=fromcrs, tocrs=tocrs)
         transform.transforms.append(crstrans)
         # backward
@@ -127,7 +123,6 @@ def warp(im, transform, invtransform, resample='nearest', maxdim=None, crs=None)
 
 
     # get output bounds
-    print(transform,invtransform)
     print('calculating coordinate bounds')
     imw,imh = im.size
     xmin,ymin,xmax,ymax = imbounds(imw, imh, transform)
@@ -157,6 +152,30 @@ def warp(im, transform, invtransform, resample='nearest', maxdim=None, crs=None)
 
     # resampling
     if resample == 'nearest':
+
+##        print 'experimental forward resampling'
+##        # this shows where forward mapping would put each pixel, and defines the output bounds
+##        # but the actual backward resampling for poly2/3 is often widely different (compare to see)
+##        pixels = []
+##        for row in range(imh):
+##            for col in range(imw):
+##                pixels.append((col,row))
+##        cols,rows = zip(*pixels)
+##        xs,ys = transform.predict(cols, rows)
+##        _A = np.eye(3)
+##        _A[0,:] = affine[:3]
+##        _A[1,:] = affine[3:6]
+##        _Ainv = np.linalg.inv(_A)
+##        terms = np.array([xs, ys, np.ones(xs.shape)])
+##        cols2,rows2 = _Ainv.dot(terms)[:2]
+##        cols2,rows2 = np.floor(cols2).astype(int), np.floor(rows2).astype(int)
+##        cols2,rows2 = np.clip(cols2, 0, w-1), np.clip(rows2, 0, h-1)
+##        # write
+##        outarr = np.zeros((h, w, 4), dtype=np.uint8)
+##        inarr = np.array(im)
+##        outarr[rows2,cols2,:] = inarr[rows,cols,:]
+##
+##        PIL.Image.fromarray(outarr).show()
     
         print('backwards mapping and resampling')
 ##        coords = []
