@@ -62,6 +62,11 @@ class Chain(object):
     def add(self, transform):
         self.transforms.append(transform)
 
+    def inverse(self):
+        transforms = [tr.inverse() for tr in reversed(self.transforms)]
+        inv = Chain(transforms)
+        return inv
+
     def predict(self, x, y):
         for trans in self.transforms:
             x,y = trans.predict(x, y)
@@ -285,6 +290,9 @@ class Polynomial(object):
         self.A = A
         return self
 
+    def inverse(self):
+        raise NotImplementedError()
+
     def predict(self, x, y):
         # to arrays
         x = np.array(x)
@@ -375,6 +383,10 @@ class Projection(object):
     def fit(self, *args, **kwargs):
         raise Exception('The map projection transform is an analytic transformation and does not need to be fit or estimated')
 
+    def inverse(self):
+        inv = Projection(self.tocrs, self.fromcrs)
+        return inv
+
     def predict(self, x, y):
         import pyproj
         fromcrs = pyproj.Proj(self.fromcrs.to_proj4())
@@ -452,6 +464,11 @@ class TIN(object):
                 trans = Polynomial(1)
                 trans.fit(intri_x, intri_y, outtri_x, outtri_y)
                 self.tris.append((intri_points, trans))
+
+    def inverse(self):
+        tris = [tri.inverse() for tri in self.tris]
+        inv = TIN(tris)
+        return inv
 
     def predict(self, x, y):
 

@@ -36,9 +36,9 @@ Transformio works by providing a set of classes for various types of transformat
 >>> y = [2,2,2,2]
 >>> xpred,ypred = trans.predict(x, y)
 >>> xpred
-[11,11,11,11]
+np.array([11,11,11,11])
 >>> ypred
-[12,12,12,12]
+np.array([12,12,12,12])
 
 Most transformations are created by fitting them to a set of observed input points and their equivalent points in the output coordinate system: 
 
@@ -51,7 +51,7 @@ All transformations have a JSON-compatible dictionary representation that allows
 
 ### Transforming vector geometries
 
-#### Reprojection
+#### Coordinate reprojection
 
 So for the typical task of reprojecting a vector geometry, you would simply use the `transforms.Projection` transformation. While this essentially just uses the `pyproj` library in the background, we provide convenience functions for applying this to entire GeoJSON geometries:
 
@@ -59,7 +59,7 @@ So for the typical task of reprojecting a vector geometry, you would simply use 
 
 In other cases, one might want to apply non-geographic/projection-based transformations to vector geometries, which is not currently possible with `pyproj`. 
 
-#### Simple vector adjustments
+#### Simple geometry adjustments
 
 For instance, one might want to simply rotate, scale, or skew a set of geometries, e.g. for artistic or visualization purposes. This can be done easily using the 1st order `Polynomial` transform, also known as affine transform: 
 
@@ -71,7 +71,7 @@ A more practical example is when digitizing the data contents of a scanned map i
 
 ... 
 
-#### Dataset integration bias correction
+#### Dataset integration and bias correction
 
 One of the cool things this allows, is easily integrating one dataset to another dataset, e.g. if through visual inspection we see that one of the datasets is biased or offset in some way. One of the ways this bias can be determined is by measuring the closest point in another reference dataset that we know to be correct, and estimating a transform based on these equivalent points. The resulting transform can then be used to correct the biased dataset: 
 
@@ -115,6 +115,21 @@ One common use-case is just reprojecting a raster dataset from one projection to
 >>> back = tio.transforms.Chain([proj2geo,geo2img])
 >>> # warp the image
 >>> warped,affine = tio.imwarp.warp(im, forw, back)
+>>> warped.save('tests/output/raster-reprojection.png')
+
+>>> # alternate version after 
+>>> # load a satellite image
+>>> from PIL import Image
+>>> im = Image.open('tests/data/land_shallow_topo_2048.tif')
+>>> # define pixel to original projection transform
+>>> bounds = [-180,90,180,-90] # left,upper,right,bottom
+>>> img2geo = tio.imwarp.fitbounds(im.size[0], im.size[1], bounds)
+>>> # define original to target projection transform
+>>> fromcrs = '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'
+>>> tocrs = '+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m no_defs'
+>>> geo2proj = tio.transforms.Projection(fromcrs, tocrs)
+>>> # warp the image
+>>> warped,affine = tio.imwarp.warp(im, [img2geo,geo2proj])
 >>> warped.save('tests/output/raster-reprojection.png')
 
 This returns a numpy image array containing the warped image data, and the affine transform parameters defining the image's coordinate system. 

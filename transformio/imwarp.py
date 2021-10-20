@@ -7,9 +7,28 @@ import urllib
 
 from . import transforms
 
+def fitbounds(width, height, bounds):
+    '''Fit and return a pixel-to-coordinate affine transformation 
+    for an image whose corner coordinates are known. 
+    
+    Note: This is the inverse of imbounds(). 
+    '''
+    # define corner coordinates in pixel and geographic space
+    imgcorners = [(0,0),(width,0),(width,height),(0,height)]
+    bx1,by1,bx2,by2 = bounds
+    geocorners = [(bx1,by1),(bx2,by1),(bx2,by2),(bx1,by2)]
+    x1,y1 = zip(*imgcorners)
+    x2,y2 = zip(*geocorners)
+    # based on these create the image to geographic transform
+    trans = transforms.Polynomial(order=1)
+    trans.fit(x1, y1, x2, y2)
+    return trans
 
 def imbounds(width, height, transform):
-    # calc output bounds based on transforming source image pixel edges and diagonal distance, ala GDAL
+    '''Calculate the output bounds by transforming source image pixel 
+    coordinates. 
+    '''
+    # NOTE: This is the same approach used by GDAL
     # TODO: alternatively based on internal grid or just all the pixels
     # see https://github.com/OSGeo/gdal/blob/60d8a9ca09c466225508cb82e30a64aefa899a41/gdal/alg/gdaltransformer.cpp#L135
 
