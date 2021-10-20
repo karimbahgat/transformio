@@ -86,20 +86,36 @@ This same general idea can be used to gradually morph a vector geometry towards 
 
 ### Transforming raster grids
 
-For raster datasets which consist of regularly spaced grid cells, each cell or image pixel needs to be projected and resampled to another coordinate system. Such raster transformation is more complicated and involves more steps than in the case of vector transformation. Transformio greatly simplifies this process. 
+For raster datasets which consist of regularly spaced grid cells, each cell or image pixel needs to be projected and resampled to another coordinate system. Such raster transformation is more complicated and involves more steps than in the case of vector transformation. Transformio greatly simplifies this process, and works seamlessly with the Pillow imaging library. 
 
 #### Raster reprojection
 
 One common use-case is just reprojecting a raster dataset from one projection to another: 
 
 >>> # load a satellite image
->>> im = Image.open('satellite.png')
->>> # define the projection transform
->>> fromcrs = '+init=EPSG:4327'
->>> tocrs = '+init=EPSG:4327'
->>> trans = tio.transforms.Projection(fromcrs, tocrs)
+>>> from PIL import Image
+>>> im = Image.open('tests/data/land_shallow_topo_2048.tif')
+>>> # define corner coordinates in pixel and geographic space
+>>> imgcorners = [(0,0),(im.size[0],0),im.size,(0,im.size[1])]
+>>> geocorners = [(-180,90),(180,90),(180,-90),(-180,-90)]
+>>> x,y = zip(*imgcorners)
+>>> x2,y2 = zip(*geocorners)
+>>> # based on these create the image to geographic transform
+>>> img2geo = tio.transforms.Polynomial(order=1)
+>>> img2geo.fit(x, y, x2, y2)
+>>> geo2img = tio.transforms.Polynomial(order=1)
+>>> geo2img.fit(x, y, x2, y2, invert=True)
+>>> # define the geographic to projection transform
+>>> fromcrs = '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'
+>>> tocrs = '+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m no_defs'
+>>> geo2proj = tio.transforms.Projection(fromcrs, tocrs)
+>>> proj2geo = tio.transforms.Projection(tocrs, fromcrs)
+>>> # create the final chained transforms
+>>> forw = tio.transforms.Chain([img2geo,geo2proj])
+>>> back = tio.transforms.Chain([proj2geo,geo2img])
 >>> # warp the image
->>> warped,affine = tio.imwarp.warp(im, trans, trans.inverse())
+>>> warped,affine = tio.imwarp.warp(im, forw, back)
+>>> warped.save('tests/output/raster-reprojection.png')
 
 This returns a numpy image array containing the warped image data, and the affine transform parameters defining the image's coordinate system. 
 

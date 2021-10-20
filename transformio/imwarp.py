@@ -45,6 +45,8 @@ def imbounds(width, height, transform):
     predx,predy = transform.predict(cols, rows)
     predx = predx[~np.isnan(predx)]
     predy = predy[~np.isnan(predy)]
+    predx = predx[~np.isinf(predx)]
+    predy = predy[~np.isinf(predy)]
     xmin,ymin,xmax,ymax = predx.min(), predy.min(), predx.max(), predy.max()
 
     # (TEMP GET WGS84 BOUNDS TOO)
