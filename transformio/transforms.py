@@ -1,7 +1,24 @@
 
 import numpy as np
 
+model_dict_doc = '''
+    - type: the name of the transformation. 
+    - params: a dict of parameters defining a transform model. 
+    - data: a dict of parameters representing the data of a specific fitted transform model. 
+    '''
+
+to_json_doc = '''Returns a JSON compatible dict sufficient to store and recreate the transformation.
+    The returned dict has the following structure:
+    {}
+    '''.format(model_dict_doc)
+
 def from_json(js):
+    '''Creates and returns a transform object from a transform dict definition
+    as returned by the corresponding transform object's `info()` method.
+
+    The dict should have the following structure:
+    {}
+    '''.format(model_dict_doc)
     cls = {'Polynomial':Polynomial,
            'Projection':Projection,
            'TIN':TIN,
@@ -20,6 +37,11 @@ class Chain(object):
         return u'Chain Transform(transforms={})'.format(self.transforms)
 
     def info(self):
+        '''For backward-compatibility. See instead `.to_json()`'''
+        return self.to_json()
+    
+    def to_json(self):
+        '''{}'''.format(to_json_doc)
         # TODO: rename to_json()
         params = {}
         data = {'transforms':[trans.info() for trans in self.transforms] }
@@ -74,7 +96,11 @@ class Polynomial(object):
         return new
 
     def info(self):
-        # TODO: rename to_json()
+        '''For backward-compatibility. See instead `.to_json()`'''
+        return self.to_json()
+    
+    def to_json(self):
+        '''{}'''.format(to_json_doc)
         params = {'order': self.order}
         data = {'A': self.A.tolist() }
         info = {'type': 'Polynomial',
@@ -325,7 +351,11 @@ class Projection(object):
         return new
 
     def info(self):
-        # TODO: rename to_json()
+        '''For backward-compatibility. See instead `.to_json()`'''
+        return self.to_json()
+    
+    def to_json(self):
+        '''{}'''.format(to_json_doc)
         params = {}
         data = {'fromcrs': self.fromcrs.to_proj4(),
                 'tocrs': self.tocrs.to_proj4()}
@@ -358,10 +388,10 @@ class Projection(object):
 
 
 class TIN(object):
-    def __init__(self):
+    def __init__(self, tris=None):
         '''Creates a triangulated irregular network (TIN) between control points
         and does a global affine transform within each triangle'''
-        self.tris = []
+        self.tris = tris or []
         self.minpoints = 3 # at least one triangle/affine
 
     def __repr__(self):
@@ -374,6 +404,11 @@ class TIN(object):
         return new
 
     def info(self):
+        '''For backward-compatibility. See instead `.to_json()`'''
+        return self.to_json()
+    
+    def to_json(self):
+        '''{}'''.format(to_json_doc)
         params = {}
         tri_models = [(tri,trans.info()) for tri,trans in self.tris]
         data = {'tris': tri_models}
@@ -382,6 +417,13 @@ class TIN(object):
                 'data': data,
                 }
         return info
+
+    @staticmethod
+    def from_json(js):
+        init = {}
+        init['tris'] = js['data']['tris']
+        trans = TIN(**init)
+        return trans
 
     def fit(self, inx, iny, outx, outy, invert=False):
         # to arrays
