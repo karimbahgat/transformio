@@ -1,6 +1,9 @@
 
 import numpy as np
 
+# important note about noninvertible polynomial transforms
+# https://blogs.mathworks.com/steve/2006/07/27/spatial-transformations-handling-noninvertible-cases/
+
 model_dict_doc = '''
     - type: the name of the transformation. 
     - params: a dict of parameters defining a transform model. 
@@ -338,6 +341,134 @@ class Polynomial(object):
         # apply the transform matrix to predict output
         predx,predy = self.A.dot(u)[:2]
         return predx,predy
+
+
+
+class Affine(object):
+    
+    def __init__(self, 
+                xscale=None, xskew=None, xoff=None,
+                yskew=None, yscale=None, yoff=None,
+                rotate=None,
+                A=None):
+        '''Affine transform, also known as a 1st order polynomial.'''
+        if A is not None:
+            A = np.array(A)
+            if A.shape != (3,3):
+                raise ValueError('Matrix A must be shape (3,3); not {}'.format(A.shape))
+
+        elif any(xscale,xskew,xoff,yskew,yscale,yoff):
+            Aflat = np.eye(3).flatten()
+            for i,arg in enumerate(xscale,xskew,xoff,yskew,yscale,yoff):
+                Aflat[i] = arg
+            A = A.reshape((3,3))
+
+        self.A = A
+        self.minpoints = 3
+
+    def __repr__(self):
+        return u'Affine Transform(estimated={})'.format(self.A is not None)
+
+    def copy(self):
+        new = Affine(A=self.A)
+        return new
+
+    def info(self):
+        '''For backward-compatibility. See instead `.to_json()`'''
+        return self.to_json()
+    
+    def to_json(self):
+        '''{}'''.format(to_json_doc)
+        params = {}
+        data = {'A': self.A.tolist() }
+        info = {'type': 'Affine',
+                'params': params,
+                'data': data,
+                }
+        return info
+
+    @staticmethod
+    def from_json(js):
+        init = {}
+        A = np.array(js['data']['A'])
+        init['A'] = A
+        init.update(js['params'])
+        trans = Affine(**init)
+        return trans
+
+    def fit(self, inx, iny, outx, outy, invert=False): #, exact=False):
+        # to arrays
+        inx = np.array(inx)
+        iny = np.array(iny)
+        outx = np.array(outx)
+        outy = np.array(outy)
+        
+        # terms
+        x = inx
+        y = iny
+        ones = np.ones(x.shape)
+        # u consists of each term in equation, with each term being array if want to transform multiple
+        u = np.array([x,y,ones]).transpose()
+        # x and y coeffs
+        xcoeffs,xres,xrank,xsing = np.linalg.lstsq(u, outx, rcond=-1) 
+        ycoeffs,yres,yrank,ysing = np.linalg.lstsq(u, outy, rcond=-1)
+        # A matrix
+        A = np.eye(3)
+        # two first rows of the A matrix are equations for the x and y coordinates, respectively
+        A[0,:] = xcoeffs
+        A[1,:] = ycoeffs
+        # get inverse transform by inverting the Matrix
+        if invert:
+            A = np.linalg.inv(A)
+
+        self.A = A
+        return self
+
+    def inverse(self):
+        A = np.linalg.inv(self.A)
+        inv = Affine(A=A)
+        raise inv
+
+    def predict(self, x, y):
+        # to arrays
+        x = np.array(x)
+        y = np.array(y)
+
+        # input
+        u = np.array([x,y])
+        
+        # terms
+        x = x
+        y = y
+        ones = np.ones(x.shape)
+        # u consists of each term in equation, with each term being array if want to transform multiple
+        u = np.array([x,y,ones])
+
+        # apply the transform matrix to predict output
+        predx,predy = self.A.dot(u)[:2]
+        return predx,predy
+
+
+
+class Projective(object):
+    def __init__(self, fromcrs, tocrs):
+        '''A perspective-like transform'''
+        # https://www.cc.gatech.edu/~afb/classes/CS4495-Fall2013/slides/CS4495-08-TwoViews-1.pdf
+        # https://staff.fnwi.uva.nl/r.vandenboomgaard/IPCV20172018/LectureNotes/MATH/homogenous.html
+        # https://staff.fnwi.uva.nl/r.vandenboomgaard/IPCV20172018/LectureNotes/MATH/homogenous.html
+        pass
+
+
+
+class Similarity(object):
+    def __init__(self, fromcrs, tocrs):
+        '''A similarity transform.
+        
+        This is a special case of the affine transform that only retains 
+        uniform scaling, translation, rotation, or reflection.
+        '''
+        # https://scikit-image.org/docs/dev/api/skimage.transform.html#similaritytransform
+        pass
 
 
 
