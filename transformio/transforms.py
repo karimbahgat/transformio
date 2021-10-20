@@ -42,7 +42,6 @@ class Chain(object):
     
     def to_json(self):
         '''{}'''.format(to_json_doc)
-        # TODO: rename to_json()
         params = {}
         data = {'transforms':[trans.info() for trans in self.transforms] }
         info = {'type': 'Chain',
