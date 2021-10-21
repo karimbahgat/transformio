@@ -135,7 +135,7 @@ class Polynomial(object):
         trans = Polynomial(**init)
         return trans
 
-    def fit(self, inx, iny, outx, outy, invert=False): #, exact=False):
+    def fit(self, inx, iny, outx, outy, invert=True): 
         # to arrays
         inx = np.array(inx)
         iny = np.array(iny)
@@ -174,11 +174,11 @@ class Polynomial(object):
         elif self.order == 2:
             
             # inverse
-            if True: # invert
+            if invert:
                 # ALT1
                 # standard switch the points
                 backward = self.copy()
-                backward.fit(outx, outy, inx, iny)
+                backward.fit(outx, outy, inx, iny, invert=False)
                 Ainv = backward.A
 
                 # ALT2
@@ -235,11 +235,11 @@ class Polynomial(object):
         elif self.order == 3:
             
             # inverse
-            if True: #invert:
+            if invert:
                 # ALT1
                 # standard switch the points
                 backward = self.copy()
-                backward.fit(outx, outy, inx, iny)
+                backward.fit(outx, outy, inx, iny, invert=False)
                 Ainv = backward.A
 
                 # ALT2
@@ -300,16 +300,18 @@ class Polynomial(object):
             A[1,:] = ycoeffs
 
         self.A = A
-        if self.order > 1:
+        if self.order > 1 and invert:
             self.Ainv = Ainv
         return self
 
     def inverse(self):
         if self.order == 1:
-            A = np.linalg.inv(self.A)
-            inv = Polynomial(A=A)
+            # calc Ainv and use as A
+            Ainv = np.linalg.inv(self.A)
+            inv = Polynomial(A=Ainv)
         elif self.order > 1:
-            inv = self.Ainv
+            # flip Ainv and A
+            inv = Polynomial(A=self.Ainv, Ainv=self.A)
         return inv
 
     def predict(self, x, y):

@@ -86,7 +86,7 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
     # transform can be a single transform instance, a chain transform, or a list of transforms.
     # check if im is url
     if isinstance(im, str) and im.startswith('http'):
-        print('getting image from url')
+        #print('getting image from url')
         url = im
         fobj = io.BytesIO(urllib.request.urlopen(url).read())
         im = PIL.Image.open(fobj)
@@ -115,11 +115,11 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
         ratio = maxdim  / float(longest)
         if ratio < 1:
             # img is larger than maxdim
-            print('downsizing')
+            #print('downsizing')
             # resize
             nw,nh = int(im.size[0]*ratio), int(im.size[1]*ratio)
             im = im.resize((nw,nh), PIL.Image.ANTIALIAS)
-            print(im)
+            #print(im)
             # chain resize transform with existing transform
             big2small = transforms.Polynomial(order=1,
                                                      A=[[1/ratio,0,0],
@@ -139,10 +139,10 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
 
 
     # get output bounds
-    print('calculating coordinate bounds')
+    #print('calculating coordinate bounds')
     imw,imh = im.size
     xmin,ymin,xmax,ymax = imbounds(imw, imh, chain)
-    print(xmin,ymin,xmax,ymax)
+    #print(xmin,ymin,xmax,ymax)
 
     
 
@@ -194,7 +194,7 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
 ##
 ##        PIL.Image.fromarray(outarr).show()
     
-        print('backwards mapping and resampling')
+        #print('backwards mapping and resampling')
 ##        coords = []
 ##        for row in range(h):
 ##            y = yoff + row*yscale
@@ -212,12 +212,12 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
         xs = xoff + (cols * xscale)
         ys = yoff + (rows * yscale)
         invchain = chain.inverse()
-        print('inverse chain',invchain)
+        #print('inverse chain',invchain)
         backpredx,backpredy = invchain.predict(xs, ys)
         backpred = np.column_stack((backpredx, backpredy))
         backpred = backpred.reshape((h,w,2))
         
-        print('writing to output')
+        #print('writing to output')
         # slow, can prob optimize even more by using direct numpy indexing
         # 4 bands, fourth is the alpha, invisible for pixels that were not sampled
         # currently assumes input image is RGBA only... 
