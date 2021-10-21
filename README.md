@@ -92,31 +92,6 @@ For raster datasets which consist of regularly spaced grid cells, each cell or i
 
 One common use-case is just reprojecting a raster dataset from one projection to another: 
 
->>> # load a satellite image
->>> from PIL import Image
->>> im = Image.open('tests/data/land_shallow_topo_2048.tif')
->>> # define corner coordinates in pixel and geographic space
->>> imgcorners = [(0,0),(im.size[0],0),im.size,(0,im.size[1])]
->>> geocorners = [(-180,90),(180,90),(180,-90),(-180,-90)]
->>> x,y = zip(*imgcorners)
->>> x2,y2 = zip(*geocorners)
->>> # based on these create the image to geographic transform
->>> img2geo = tio.transforms.Polynomial(order=1)
->>> img2geo.fit(x, y, x2, y2)
->>> geo2img = tio.transforms.Polynomial(order=1)
->>> geo2img.fit(x, y, x2, y2, invert=True)
->>> # define the geographic to projection transform
->>> fromcrs = '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'
->>> tocrs = '+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m no_defs'
->>> geo2proj = tio.transforms.Projection(fromcrs, tocrs)
->>> proj2geo = tio.transforms.Projection(tocrs, fromcrs)
->>> # create the final chained transforms
->>> forw = tio.transforms.Chain([img2geo,geo2proj])
->>> back = tio.transforms.Chain([proj2geo,geo2img])
->>> # warp the image
->>> warped,affine = tio.imwarp.warp(im, forw, back)
->>> warped.save('tests/output/raster-reprojection.png')
-
 >>> # alternate version after 
 >>> # load a satellite image
 >>> from PIL import Image
@@ -125,12 +100,12 @@ One common use-case is just reprojecting a raster dataset from one projection to
 >>> bounds = [-180,90,180,-90] # left,upper,right,bottom
 >>> img2geo = tio.imwarp.fitbounds(im.size[0], im.size[1], bounds)
 >>> # define original to target projection transform
->>> fromcrs = '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'
->>> tocrs = '+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m no_defs'
->>> geo2proj = tio.transforms.Projection(fromcrs, tocrs)
+>>> fromcrs = '+proj=longlat +datum=WGS84 +no_defs ' #'epsg:4326'
+>>> tocrs = 'esri:54009' #'esri:54030' #'epsg:3995'
+>>> geo2proj = tio.transforms.MapProjection(fromcrs, tocrs)
 >>> # warp the image
 >>> warped,affine = tio.imwarp.warp(im, [img2geo,geo2proj])
->>> warped.save('tests/output/raster-reprojection.png')
+>>> warped.save('tests/output/doctest-raster-reprojection.png')
 
 This returns a numpy image array containing the warped image data, and the affine transform parameters defining the image's coordinate system. 
 

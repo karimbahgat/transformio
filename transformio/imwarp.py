@@ -82,7 +82,8 @@ def imbounds(width, height, transform):
 
     return xmin,ymin,xmax,ymax
 
-def warp(im, transform, invtransform, resample='nearest', maxdim=None, fromcrs=None, tocrs=None):
+def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=None):
+    # transform can be a single transform instance, a chain transform, or a list of transforms.
     # check if im is url
     if isinstance(im, str) and im.startswith('http'):
         print('getting image from url')
@@ -98,9 +99,13 @@ def warp(im, transform, invtransform, resample='nearest', maxdim=None, fromcrs=N
 
 
 
-    # create forward and backward chains, to easily add additional transforms
-    transform = transforms.Chain(transforms=[transform]) # forward
-    invtransform = transforms.Chain(transforms=[invtransform]) # backward
+    # create transform chain, to easily add additional transforms
+    if isinstance(transform, list):
+        chain = transforms.Chain(transforms=transform) 
+    elif isinstance(transform, transforms.Chain):
+        chain = transform.copy()
+    else:
+        chain = transforms.Chain(transforms=[transform]) 
 
 
 
@@ -116,42 +121,33 @@ def warp(im, transform, invtransform, resample='nearest', maxdim=None, fromcrs=N
             im = im.resize((nw,nh), PIL.Image.ANTIALIAS)
             print(im)
             # chain resize transform with existing transform
-            small2big = transforms.Polynomial(order=1,
+            big2small = transforms.Polynomial(order=1,
                                                      A=[[1/ratio,0,0],
                                                         [0,1/ratio,0],
                                                         [0,0,1]],
                                                      )
-            transform.transforms.insert(0, small2big)
-            big2small = transforms.Polynomial(order=1,
-                                                     A=[[ratio,0,0],
-                                                        [0,ratio,0],
-                                                        [0,0,1]],
-                                                     )
-            invtransform.transforms.append(big2small)
+            chain.transforms.insert(0, big2small)
 
 
 
     # add in reproj
     if fromcrs and tocrs:
         # forward
-        crstrans = transforms.Projection(fromcrs=fromcrs, tocrs=tocrs)
-        transform.transforms.append(crstrans)
-        # backward
-        fromcrs,tocrs = tocrs,fromcrs # switch from-to
-        crstrans = transforms.Projection(fromcrs=fromcrs, tocrs=tocrs)
-        invtransform.transforms.insert(0, crstrans)
+        crstrans = transforms.MapProjection(fromcrs=fromcrs, tocrs=tocrs)
+        chain.add(crstrans)
 
 
 
     # get output bounds
     print('calculating coordinate bounds')
     imw,imh = im.size
-    xmin,ymin,xmax,ymax = imbounds(imw, imh, transform)
+    xmin,ymin,xmax,ymax = imbounds(imw, imh, chain)
     print(xmin,ymin,xmax,ymax)
 
     
 
     # calc diagonal dist and output dims
+    # TODO: allow user-specified output dimensions
     dx,dy = xmax-xmin, ymax-ymin
     diag = math.hypot(dx, dy)
     xyscale = diag / float(math.hypot(imw, imh))
@@ -215,7 +211,9 @@ def warp(im, transform, invtransform, resample='nearest', maxdim=None, fromcrs=N
         cols,rows = cols.flatten(), rows.flatten()
         xs = xoff + (cols * xscale)
         ys = yoff + (rows * yscale)
-        backpredx,backpredy = invtransform.predict(xs, ys)
+        invchain = chain.inverse()
+        print('inverse chain',invchain)
+        backpredx,backpredy = invchain.predict(xs, ys)
         backpred = np.column_stack((backpredx, backpredy))
         backpred = backpred.reshape((h,w,2))
         

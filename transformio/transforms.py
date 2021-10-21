@@ -23,7 +23,7 @@ def from_json(js):
     {}
     '''.format(model_dict_doc)
     cls = {'Polynomial':Polynomial,
-           'Projection':Projection,
+           'MapProjection':MapProjection,
            'TIN':TIN,
            'Chain':Chain,
            }[js['type']]
@@ -77,7 +77,7 @@ class Chain(object):
 
 class Polynomial(object):
     
-    def __init__(self, order=None, A=None):
+    def __init__(self, order=None, A=None, Ainv=None):
         '''Polynomial transform of 1st (affine), 2nd, or 3rd order'''
         if A is not None:
             A = np.array(A)
@@ -90,7 +90,12 @@ class Polynomial(object):
             else:
                 raise ValueError('Matrix A must be shape (3,3), (6,6), or (10,10); not {}'.format(A.shape))
 
+        if Ainv is not None:
+            Ainv = np.array(Ainv)
+            assert Ainv.shape == A.shape
+
         self.A = A
+        self.Ainv = Ainv
         self.order = order
         self.minpoints = {1:3, 2:10, 3:20}.get(order, 3) # minimum 3 if order not set
 
@@ -98,7 +103,7 @@ class Polynomial(object):
         return u'Polynomial Transform(order={}, estimated={})'.format(self.order, self.A is not None)
 
     def copy(self):
-        new = Polynomial(order=self.order, A=self.A)
+        new = Polynomial(order=self.order, A=self.A, Ainv=self.Ainv)
         new.minpoints = self.minpoints
         return new
 
@@ -110,6 +115,8 @@ class Polynomial(object):
         '''{}'''.format(to_json_doc)
         params = {'order': self.order}
         data = {'A': self.A.tolist() }
+        if self.Ainv is not None:
+            data['Ainv'] = self.Ainv
         info = {'type': 'Polynomial',
                 'params': params,
                 'data': data,
@@ -121,6 +128,9 @@ class Polynomial(object):
         init = {}
         A = np.array(js['data']['A'])
         init['A'] = A
+        if 'Ainv' in js['data']:
+            Ainv = np.array(js['data']['Ainv'])
+            init['Ainv'] = Ainv
         init.update(js['params'])
         trans = Polynomial(**init)
         return trans
@@ -160,18 +170,16 @@ class Polynomial(object):
             # two first rows of the A matrix are equations for the x and y coordinates, respectively
             A[0,:] = xcoeffs
             A[1,:] = ycoeffs
-            # get inverse transform by inverting the Matrix
-            if invert:
-                A = np.linalg.inv(A)
             
         elif self.order == 2:
             
-            if invert:
+            # inverse
+            if True: # invert
                 # ALT1
                 # standard switch the points
                 backward = self.copy()
                 backward.fit(outx, outy, inx, iny)
-                A = backward.A
+                Ainv = backward.A
 
                 # ALT2
                 # fit the forward transform
@@ -184,7 +192,7 @@ class Polynomial(object):
 ##                # get backward transform by fitting the forward predicted gcps to the input gcps
 ##                backward = self.copy()
 ##                backward.fit(x_pred, y_pred, inx, iny)
-##                A = backward.A
+##                Ainv = backward.A
 
                 # ALT3
 ##                # fit the forward transform
@@ -203,35 +211,36 @@ class Polynomial(object):
 ##                # should be a near perfect match (~0 residuals) since these are derived from the same transform
 ##                backward = self.copy()
 ##                backward.fit(x_pred, y_pred, x, y)
-##                A = backward.A
+##                Ainv = backward.A
 
-            else:
-                # terms
-                x = inx
-                y = iny
-                xx = x*x
-                xy = x*y
-                yy = y*y
-                ones = np.ones(x.shape)
-                # u consists of each term in equation, with each term being array if want to transform multiple
-                u = np.array([xx,xy,yy,x,y,ones]).transpose()
-                # find best coefficients for all equivalent points using least squares
-                xcoeffs,xres,xrank,xsing = np.linalg.lstsq(u, outx, rcond=-1) 
-                ycoeffs,yres,yrank,ysing = np.linalg.lstsq(u, outy, rcond=-1)
-                # A matrix
-                A = np.eye(6)
-                # two first rows of the A matrix are equations for the x and y coordinates, respectively
-                A[0,:] = xcoeffs
-                A[1,:] = ycoeffs
+            # forward
+            # terms
+            x = inx
+            y = iny
+            xx = x*x
+            xy = x*y
+            yy = y*y
+            ones = np.ones(x.shape)
+            # u consists of each term in equation, with each term being array if want to transform multiple
+            u = np.array([xx,xy,yy,x,y,ones]).transpose()
+            # find best coefficients for all equivalent points using least squares
+            xcoeffs,xres,xrank,xsing = np.linalg.lstsq(u, outx, rcond=-1) 
+            ycoeffs,yres,yrank,ysing = np.linalg.lstsq(u, outy, rcond=-1)
+            # A matrix
+            A = np.eye(6)
+            # two first rows of the A matrix are equations for the x and y coordinates, respectively
+            A[0,:] = xcoeffs
+            A[1,:] = ycoeffs
 
         elif self.order == 3:
             
-            if invert:
+            # inverse
+            if True: #invert:
                 # ALT1
                 # standard switch the points
                 backward = self.copy()
                 backward.fit(outx, outy, inx, iny)
-                A = backward.A
+                Ainv = backward.A
 
                 # ALT2
 ##                # fit the forward transform
@@ -244,7 +253,7 @@ class Polynomial(object):
 ##                # get backward transform by fitting the forward predicted gcps to the input gcps
 ##                backward = self.copy()
 ##                backward.fit(x_pred, y_pred, inx, iny)
-##                A = backward.A
+##                Ainv = backward.A
 
                 # ALT3
 ##                # fit the forward transform
@@ -263,38 +272,45 @@ class Polynomial(object):
 ##                # should be a near perfect match (~0 residuals) since these are derived from the same transform
 ##                backward = self.copy()
 ##                backward.fit(x_pred, y_pred, x, y)
-##                A = backward.A
+##                Ainv = backward.A
 
-            else:
-                # terms
-                #X = a0 + a1x + a2y + a3xy + a4x^2 + a5y^2 + a6x^3 + a7x^2y + a8xy^2 + a9y^3
-                #Y = b0 + b1x + b2y + b3xy + b4x^2 + b5y^2 + b6x^3 + b7x^2y + b8xy^2 + b9y^3
-                x = inx
-                y = iny
-                xx = x*x
-                xy = x*y
-                yy = y*y
-                xxx = xx*x
-                xxy = xx*y
-                xyy = x*yy
-                yyy = yy*y
-                ones = np.ones(x.shape)
-                # u consists of each term in equation, with each term being array if want to transform multiple
-                u = np.array([xxx,xxy,xyy,yyy, xx,xy,yy, x,y,ones]).transpose()
-                # x and y coeffs
-                xcoeffs,xres,xrank,xsing = np.linalg.lstsq(u, outx, rcond=-1) 
-                ycoeffs,yres,yrank,ysing = np.linalg.lstsq(u, outy, rcond=-1)
-                # A matrix
-                A = np.eye(10)
-                # two first rows of the A matrix are equations for the x and y coordinates, respectively
-                A[0,:] = xcoeffs
-                A[1,:] = ycoeffs
+            # forward
+            # terms
+            #X = a0 + a1x + a2y + a3xy + a4x^2 + a5y^2 + a6x^3 + a7x^2y + a8xy^2 + a9y^3
+            #Y = b0 + b1x + b2y + b3xy + b4x^2 + b5y^2 + b6x^3 + b7x^2y + b8xy^2 + b9y^3
+            x = inx
+            y = iny
+            xx = x*x
+            xy = x*y
+            yy = y*y
+            xxx = xx*x
+            xxy = xx*y
+            xyy = x*yy
+            yyy = yy*y
+            ones = np.ones(x.shape)
+            # u consists of each term in equation, with each term being array if want to transform multiple
+            u = np.array([xxx,xxy,xyy,yyy, xx,xy,yy, x,y,ones]).transpose()
+            # x and y coeffs
+            xcoeffs,xres,xrank,xsing = np.linalg.lstsq(u, outx, rcond=-1) 
+            ycoeffs,yres,yrank,ysing = np.linalg.lstsq(u, outy, rcond=-1)
+            # A matrix
+            A = np.eye(10)
+            # two first rows of the A matrix are equations for the x and y coordinates, respectively
+            A[0,:] = xcoeffs
+            A[1,:] = ycoeffs
 
         self.A = A
+        if self.order > 1:
+            self.Ainv = Ainv
         return self
 
     def inverse(self):
-        raise NotImplementedError()
+        if self.order == 1:
+            A = np.linalg.inv(self.A)
+            inv = Polynomial(A=A)
+        elif self.order > 1:
+            inv = self.Ainv
+        return inv
 
     def predict(self, x, y):
         # to arrays
@@ -472,19 +488,18 @@ class Similarity(object):
 
 
 
-class Projection(object):
+class MapProjection(object):
     def __init__(self, fromcrs, tocrs):
         '''Map projection transform'''
-        import pycrs
-        self.fromcrs = pycrs.parse.from_unknown_text(fromcrs)
-        self.tocrs = pycrs.parse.from_unknown_text(tocrs)
+        self.fromcrs = fromcrs
+        self.tocrs = tocrs
         self.minpoints = 0
 
     def __repr__(self):
-        return u'Projection Transform(fromcrs={}, tocrs={})'.format(self.fromcrs.to_proj4(), self.tocrs.to_proj4())
+        return u'Map Projection Transform(fromcrs={}, tocrs={})'.format(self.fromcrs, self.tocrs)
 
     def copy(self):
-        new = Projection(fromcrs=self.fromcrs, topoints=self.topoints)
+        new = MapProjection(fromcrs=self.fromcrs, topoints=self.topoints)
         new.minpoints = self.minpoints
         return new
 
@@ -495,9 +510,9 @@ class Projection(object):
     def to_json(self):
         '''{}'''.format(to_json_doc)
         params = {}
-        data = {'fromcrs': self.fromcrs.to_proj4(),
-                'tocrs': self.tocrs.to_proj4()}
-        info = {'type': 'Projection',
+        data = {'fromcrs': self.fromcrs,
+                'tocrs': self.tocrs}
+        info = {'type': 'MapProjection',
                 'params': params,
                 'data': data,
                 }
@@ -508,20 +523,20 @@ class Projection(object):
         init = {}
         init['fromcrs'] = js['data']['fromcrs']
         init['tocrs'] = js['data']['tocrs']
-        trans = Projection(**init)
+        trans = MapProjection(**init)
         return trans
 
     def fit(self, *args, **kwargs):
         raise Exception('The map projection transform is an analytic transformation and does not need to be fit or estimated')
 
     def inverse(self):
-        inv = Projection(self.tocrs, self.fromcrs)
+        inv = MapProjection(self.tocrs, self.fromcrs)
         return inv
 
     def predict(self, x, y):
         import pyproj
-        fromcrs = pyproj.Proj(self.fromcrs.to_proj4())
-        tocrs = pyproj.Proj(self.tocrs.to_proj4())
+        fromcrs = pyproj.Proj(self.fromcrs)
+        tocrs = pyproj.Proj(self.tocrs)
         predx,predy = pyproj.transform(fromcrs,
                                tocrs,
                                x, y)
@@ -587,14 +602,9 @@ class TIN(object):
             outtri_x = [outx[inx==_x][0] for _x in intri_x]
             outtri_y = [outy[iny==_y][0] for _y in intri_y]
             outtri_points = list(zip(outtri_x, outtri_y))
-            if invert:
-                trans = Polynomial(1)
-                trans.fit(intri_x, intri_y, outtri_x, outtri_y, invert=True)
-                self.tris.append((outtri_points, trans))
-            else:
-                trans = Polynomial(1)
-                trans.fit(intri_x, intri_y, outtri_x, outtri_y)
-                self.tris.append((intri_points, trans))
+            trans = Polynomial(1)
+            trans.fit(intri_x, intri_y, outtri_x, outtri_y)
+            self.tris.append((intri_points, trans))
 
     def inverse(self):
         tris = [tri.inverse() for tri in self.tris]
