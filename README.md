@@ -1,6 +1,6 @@
 # Transformio
 
-Creates, applies, and evaluates coordinate transformations. 
+Creates, applies, and evaluates coordinate transformations for geospatial data. 
 
 
 ## Introduction
@@ -111,16 +111,30 @@ One common use-case is just reprojecting a raster dataset from one projection to
 
 First, we need to define the affine transform needed to determine the geographic coordinates at each pixel. Typically, this is stored as six parameters in the metadata of the raster file. For instance: 
 
-...
-
-In other cases, you may only know the bounds of your raster dataset:
-
     >>> # load a raster dataset
     >>> from PIL import Image
-    >>> im = Image.open('tests/data/land_shallow_topo_2048.tif')
-    >>> # define pixel to original projection transform
+    >>> im = Image.open('tests/data/land_shallow_topo_2048.png')
+    
+    >>> # load affine parameters from .wld file
+    >>> with open('tests/data/land_shallow_topo_2048.wld', mode='r') as f:
+    ...     a,b,c,d,e,f = f.read().split()
+    ...     a,b,c,d,e,f = map(float, [a,b,c,d,e,f])
+
+    >>> # create image-to-geographic transform from affine parameters
+    >>> A = [[a,b,c],[d,e,f],[0,0,1]]
+    >>> img2geo = tio.transforms.Affine(A=A)
+    >>> img2geo.A.round(10).tolist()
+    [[0.17578125, 0.0, -180.0], [0.0, -0.17578125, 90.0], [0.0, 0.0, 1.0]]
+
+![Original image](/tests/data/land_shallow_topo_2048.png)
+
+Alternatively, if the affine parameters are not explicitly provided, you may instead generate the transform from the known coordinate bounds of the dataset: 
+
+    >>> # create image-to-geographic transform from coordinate bounds
     >>> bounds = [-180,90,180,-90] # left,upper,right,bottom
     >>> img2geo = tio.imwarp.fitbounds(im.size[0], im.size[1], bounds)
+    >>> img2geo.A.round(10).tolist()
+    [[0.17578125, 0.0, -180.0], [0.0, -0.17578125, 90.0], [0.0, 0.0, 1.0]]
 
 Next, we define a map projection transform for projecting the coordinate reference system of the original raster dataset into the target reference system: 
 
@@ -147,6 +161,8 @@ Another common scenario is when performing georeferencing of scanned map images.
     >>> im = Image.open('tests/data/burkina_pol96.jpg')
     >>> impoints = [(574, 304), (285, 854), (816, 934), (945, 96), (522, 114), (779, 241), (841, 302), (918, 384), (102, 411), (316, 444)]
     >>> geopoints = [(-0.86537, 14.22963), (-3.279831, 9.6586821), (1.133333, 8.983333), (2.4022, 15.9182), (-1.3094536, 15.8179117), (0.917385, 14.730746), (1.454179, 14.207113), (2.1098, 13.51366), (-4.895615, 13.303346), (-3.0694, 13.0725)]
+
+![Original image](/tests/data/burkina_pol96.jpg)
 
 Based on these points we want to fit the map using a 2nd order polynomial transformation: 
 
@@ -185,6 +201,7 @@ First, let's define the map image we will be using:
     >>> im = Image.open('tests/data/burkina_pol96.jpg')
     >>> impoints = [(574, 304), (285, 854), (816, 934), (945, 96), (522, 114), (779, 241), (841, 302), (918, 384), (102, 411), (316, 444)]
     >>> geopoints = [(-0.86537, 14.22963), (-3.279831, 9.6586821), (1.133333, 8.983333), (2.4022, 15.9182), (-1.3094536, 15.8179117), (0.917385, 14.730746), (1.454179, 14.207113), (2.1098, 13.51366), (-4.895615, 13.303346), (-3.0694, 13.0725)]
+
     >>> # create and fit the transform model
     >>> imx,imy = zip(*impoints)
     >>> geox,geoy = zip(*geopoints)
@@ -201,6 +218,7 @@ Map projection transforms are specified using the proj4 strings of the source an
     >>> fromcrs = '+proj=longlat +datum=WGS84 +no_defs ' #'epsg:4326'
     >>> tocrs = '+proj=geos +h=35785831.0'
     >>> geo2proj = tio.transforms.MapProjection(fromcrs, tocrs)
+
     >>> # warp the image
     >>> warped,affine = tio.imwarp.warp(im, [img2geo,geo2proj])
     >>> warped.save('tests/output/doctest-transforms-mapprojection.png')
@@ -240,6 +258,7 @@ TIN (triangulated irregular network) transforms, also known as the piecewise aff
     >>> trans = tio.transforms.TIN()
     >>> trans.fit(imx, imy, geox, geoy)
     TIN Transform(estimated=True)
+    
     >>> # warp the image
     >>> warped,affine = tio.imwarp.warp(im, trans)
     >>> warped.save('tests/output/doctest-transforms-tin.png')
