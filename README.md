@@ -218,12 +218,12 @@ First, let's define the map image we will be using:
 Map projection transforms are specified using the proj4 strings of the source and target projection: 
 
     >>> # define an approximate pixel to original projection transform
-    >>> #img2geo = tio.transforms.Affine()
-    >>> #img2geo.fit(imx, imy, geox, geoy)
+    >>> img2geo = tio.transforms.Affine()
+    >>> img2geo.fit(imx, imy, geox, geoy)
     
     >>> # define original to target projection transform
     >>> fromcrs = '+proj=longlat +datum=WGS84 +no_defs ' #'epsg:4326'
-    >>> tocrs = '+proj=geos +h=35785831.0'
+    >>> tocrs = 'EPSG:32631'
     >>> geo2proj = tio.transforms.MapProjection(fromcrs, tocrs)
 
     >>> # warp the image

@@ -459,7 +459,7 @@ class Affine(object):
     def inverse(self):
         Ainv = np.linalg.inv(self.A)
         inv = Affine(A=Ainv)
-        raise inv
+        return inv
 
     def predict(self, x, y):
         # to arrays
