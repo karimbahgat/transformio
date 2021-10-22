@@ -22,7 +22,10 @@ def from_json(js):
     The dict should have the following structure:
     {}
     '''.format(model_dict_doc)
-    cls = {'Polynomial':Polynomial,
+    cls = {#'Similarity':Similarity,
+           'Affine':Affine,
+           #'Projective':Projective,
+           'Polynomial':Polynomial,
            'MapProjection':MapProjection,
            'TIN':TIN,
            'Chain':Chain,
@@ -365,9 +368,7 @@ class Polynomial(object):
 class Affine(object):
     
     def __init__(self, 
-                xscale=None, xskew=None, xoff=None,
-                yskew=None, yscale=None, yoff=None,
-                rotate=None,
+                scale=None, offset=None, rotate=None, skew=None,
                 A=None):
         '''Affine transform, also known as a 1st order polynomial.'''
         if A is not None:
@@ -375,11 +376,27 @@ class Affine(object):
             if A.shape != (3,3):
                 raise ValueError('Matrix A must be shape (3,3); not {}'.format(A.shape))
 
-        elif any(xscale,xskew,xoff,yskew,yscale,yoff):
-            Aflat = np.eye(3).flatten()
-            for i,arg in enumerate(xscale,xskew,xoff,yskew,yscale,yoff):
-                Aflat[i] = arg
-            A = A.reshape((3,3))
+        else:
+            A = np.eye(3)
+            if scale:
+                if isinstance(scale, tuple):
+                    xscale,yscale = scale
+                else:
+                    xscale = yscale = scale
+                A[0,0] = xscale
+                A[1,1] = yscale
+            if offset:
+                if isinstance(offset, tuple):
+                    xoff,yoff = offset
+                else:
+                    xoff = yoff = offset
+                A[0,2] = xoff
+                A[1,2] = yoff
+            if rotate:
+                # first rotate, then offset back
+                raise NotImplementedError()
+            if skew:
+                raise NotImplementedError()
 
         self.A = A
         self.minpoints = 3
@@ -435,16 +452,13 @@ class Affine(object):
         # two first rows of the A matrix are equations for the x and y coordinates, respectively
         A[0,:] = xcoeffs
         A[1,:] = ycoeffs
-        # get inverse transform by inverting the Matrix
-        if invert:
-            A = np.linalg.inv(A)
 
         self.A = A
         return self
 
     def inverse(self):
-        A = np.linalg.inv(self.A)
-        inv = Affine(A=A)
+        Ainv = np.linalg.inv(self.A)
+        inv = Affine(A=Ainv)
         raise inv
 
     def predict(self, x, y):
@@ -479,7 +493,8 @@ class Projective(object):
 
 
 class Similarity(object):
-    def __init__(self, fromcrs, tocrs):
+    def __init__(self, scale=None, offset=None, rotate=None,
+                A=None):
         '''A similarity transform.
         
         This is a special case of the affine transform that only retains 
@@ -591,7 +606,7 @@ class TIN(object):
         outx = np.array(outx)
         outy = np.array(outy)
 
-        import shapely
+        import shapely, shapely.geometry, shapely.ops
 
         inpoints = list(zip(inx,iny))
         inpoints = shapely.geometry.MultiPoint(inpoints)
@@ -607,10 +622,17 @@ class TIN(object):
             trans = Polynomial(1)
             trans.fit(intri_x, intri_y, outtri_x, outtri_y)
             self.tris.append((intri_points, trans))
+        
+        return self
 
     def inverse(self):
-        tris = [tri.inverse() for tri in self.tris]
-        inv = TIN(tris)
+        invtris = []
+        for tri,trans in self.tris:
+            tri_x,tri_y = zip(*tri)
+            tri_xpred,tri_ypred = trans.predict(tri_x, tri_y)
+            tripred = zip(tri_xpred, tri_ypred)
+            invtris.append( (tripred,trans.inverse()) )
+        inv = TIN(invtris)
         return inv
 
     def predict(self, x, y):
