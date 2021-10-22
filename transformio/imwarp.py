@@ -39,26 +39,26 @@ def imbounds(width, height, transform):
 
     # get sample pixels at intervals
     imw,imh = width,height
-    cols = np.linspace(0, imw-1, 100)
-    rows = np.linspace(0, imh-1, 100)
+    cols = np.linspace(0, imw, 100)
+    rows = np.linspace(0, imh, 100)
     cols,rows = np.meshgrid(cols, rows)
     cols,rows = cols.flatten(), rows.flatten()
 
     # ensure we get every pixel along edges
-    allxs = np.linspace(0, imw-1, imw)
-    allys = np.linspace(0, imh-1, imh)
+    allcols = np.linspace(0, imw, imw+1)
+    allrows = np.linspace(0, imh, imh+1)
     # top
-    cols = np.append(cols, allxs)
-    rows = np.append(rows, np.zeros(allxs.shape))
+    cols = np.append(cols, allcols)
+    rows = np.append(rows, np.zeros(allcols.shape))
     # bottom
-    cols = np.append(cols, allxs)
-    rows = np.append(rows, np.zeros(allxs.shape)*imh)
+    cols = np.append(cols, allcols)
+    rows = np.append(rows, np.zeros(allcols.shape)*imh)
     # left
-    cols = np.append(cols, np.zeros(allys.shape))
-    rows = np.append(rows, allys)
+    cols = np.append(cols, np.zeros(allrows.shape))
+    rows = np.append(rows, allrows)
     # right
-    cols = np.append(cols, np.zeros(allys.shape)*imw)
-    rows = np.append(rows, allys)
+    cols = np.append(cols, np.zeros(allrows.shape)*imw)
+    rows = np.append(rows, allrows)
 
     # transform and get bounds
     predx,predy = transform.predict(cols, rows)
