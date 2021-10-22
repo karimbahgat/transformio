@@ -145,7 +145,7 @@ def drop_worst_model(trans, inpoints, outpoints, leave_one_out=False, invert=Fal
     
     return trans, inpoints, outpoints, err, resids
 
-def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoints=None, leave_one_out=False, invert=False, distance=None, accuracy='rmse'):
+def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoints=None, leave_one_out=False, invert=False, distance=None, accuracy='rmse', verbose=False):
     _inpoints = list(inpoints)
     _outpoints = list(outpoints)
     trans = trans.copy()
@@ -159,15 +159,18 @@ def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoin
     err,resids = model_accuracy(trans, _inpoints, _outpoints,
                                 leave_one_out, invert, distance, accuracy)
     seq.append((trans, _inpoints, _outpoints, err, resids))
-    print(trans)
-    print('init error',err)
+    if verbose:
+        print(trans)
+        print('init error',err)
 
     # auto refine improvement threshold or minpoints
     while len(_inpoints) > minpoints: #for _ in range(len(inpoints)-trans.minpoints):
-        print(len(_inpoints))
+        if verbose:
+            print(len(_inpoints))
         _trans,_inpoints,_outpoints,_err,_resids = drop_worst_model(trans, _inpoints, _outpoints,
                                                                     leave_one_out, invert, distance, accuracy)
-        print('new error',_err)
+        if verbose:
+            print('new error',_err)
         
         _preverr = seq[-1][-2]
         impr = (_err-_preverr)/float(_preverr)
