@@ -606,6 +606,23 @@ class TIN(object):
         outx = np.array(outx)
         outy = np.array(outy)
 
+        # add corner coordinates to the input points
+        inxmin,inymin,inxmax,inymax = inx.min(),iny.min(),inx.max(),iny.max()
+        outxmin,outymin,outxmax,outymax = outx.min(),outy.min(),outx.max(),outy.max()
+        # need to account for axis orientation? 
+        inx1,iny1,inx2,iny2 = inxmin,inymin,inxmax,inymax
+        outx1,outy1,outx2,outy2 = outxmin,outymin,outxmax,outymax
+        # define and add the corners
+        incorners = [(inx1,iny1),(inx2,iny1),(inx2,iny2),(inx1,iny2)]
+        outcorners = [(outx1,outy1),(outx2,outy1),(outx2,outy2),(outx1,outy2)]
+        inx_corners,iny_corners = zip(*incorners)
+        outx_corners,outy_corners = zip(*outcorners)
+        inx = np.append(inx, inx_corners)
+        iny = np.append(iny, iny_corners)
+        outx = np.append(outx, outx_corners)
+        outy = np.append(outy, outy_corners)
+
+
         import shapely, shapely.geometry, shapely.ops
 
         inpoints = list(zip(inx,iny))

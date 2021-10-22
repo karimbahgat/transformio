@@ -105,6 +105,12 @@ Finally, the resulting transform can be used to correct the biased dataset:
 
 For raster datasets which consist of regularly spaced grid cells, each cell or image pixel needs to be projected and resampled to another coordinate system. Such raster transformation is more complicated and involves more steps than in the case of vector transformation. Transformio greatly simplifies this process, and works seamlessly with the Pillow imaging library. 
 
+There are two basic steps to this process that transformio handles behind the scenes. 
+
+The first is the process of mapping coordinates between the two coordinate systems. Forward or backward... 
+
+The second is how to resample and interpolate the pixels. Currently, transformio only supports nearest neighbour resampling... 
+
 ### *Raster reprojection*
 
 One common use-case is just reprojecting a raster dataset from one projection to another. 
@@ -152,6 +158,7 @@ That's all we need. Now just call on the `warp` function along with a list of sp
 ![Expected image](/tests/output/doctest-raster-reprojection.png)
 
 This returns a numpy image array containing the warped image data, and the affine transform parameters defining the image's coordinate system. 
+
 
 ### *Map georeferencing/registration*
 
@@ -227,9 +234,15 @@ Map projection transforms are specified using the proj4 strings of the source an
 
 ### *Similarity transformations*
 
+...
+
 ### *Affine transformations*
 
+...
+
 ### *Projective transformations*
+
+...
 
 ### *Polynomial transformations*
 
@@ -252,13 +265,13 @@ If you don't specify the order of your polynomial transform, this will be determ
 
 ### *Triangulated Irregular Network transformations*
 
-TIN (triangulated irregular network) transforms, also known as the piecewise affine transform, divides the image into a mesh of triangles formed by the control points and inside each triangle estimates a local affine transforms for transforming the pixels contained within. 
+TIN (triangulated irregular network) transforms, also known as the piecewise affine transform, divides the image into a mesh of triangles formed by the control points and inside each triangle estimates a local affine transforms for transforming the pixels contained within. When using this transform it's important to include control points along the edges and corners, since the transform is only defined inside the bounding box of the input control points and will result in a cropped image. 
 
     >>> # create and fit the transform model
     >>> trans = tio.transforms.TIN()
     >>> trans.fit(imx, imy, geox, geoy)
     TIN Transform(estimated=True)
-    
+
     >>> # warp the image
     >>> warped,affine = tio.imwarp.warp(im, trans)
     >>> warped.save('tests/output/doctest-transforms-tin.png')
@@ -267,17 +280,25 @@ TIN (triangulated irregular network) transforms, also known as the piecewise aff
 
 ### *Chained transformations*
 
+...
+
 
 ## Accuracy evaluation
 
 An important but often overlooked aspect of coordinate transformation such as map georeferencing is the impact it has on accuracy or error. Transformio has key functionality for evaluating the accuracy of a transformation, so that the overall confidence in the final product can be evaluated. This functionality is contained in the `accuracy` module. 
+
+...
 
 
 ## Control point outliers
 
 The ground control points used to fit transformation models are often noisy and contain outliers, resulting in an adverse effect on the fitted transform. Therefore, we need efficient and automated ways to detect and exclude these. Transformio includes a set of functions to help with this. 
 
+...
+
 
 ## Model selection
 
 In addition to evaluating individual models, transformio provides several algorithms for automatically comparing and selecting the most optimal transformation model for a particular use-case. 
+
+...
