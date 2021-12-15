@@ -1,5 +1,6 @@
 
 import numpy as np
+import math
 
 # important note about noninvertible polynomial transforms
 # https://blogs.mathworks.com/steve/2006/07/27/spatial-transformations-handling-noninvertible-cases/
@@ -41,6 +42,11 @@ class Chain(object):
 
     def __repr__(self):
         return u'Chain Transform(transforms={})'.format(self.transforms)
+
+    def copy(self):
+        transforms = [t.copy() for t in self.transforms]
+        new = Chain(transforms)
+        return new
 
     def info(self):
         '''For backward-compatibility. See instead `.to_json()`'''
@@ -393,8 +399,11 @@ class Affine(object):
                 A[0,2] = xoff
                 A[1,2] = yoff
             if rotate:
-                # first rotate, then offset back
-                raise NotImplementedError()
+                angle = rotate
+                A[0,0] = math.cos(angle)
+                A[0,1] = -math.sin(angle)
+                A[1,0] = math.sin(angle)
+                A[1,1] = math.cos(angle)
             if skew:
                 raise NotImplementedError()
 
@@ -512,11 +521,14 @@ class MapProjection(object):
         self.tocrs = tocrs
         self.minpoints = 0
 
+        import pyproj
+        self._transformer = pyproj.Transformer.from_crs(fromcrs, tocrs)
+
     def __repr__(self):
         return u'Map Projection Transform(fromcrs={}, tocrs={})'.format(self.fromcrs, self.tocrs)
 
     def copy(self):
-        new = MapProjection(fromcrs=self.fromcrs, topoints=self.topoints)
+        new = MapProjection(fromcrs=self.fromcrs, tocrs=self.tocrs)
         new.minpoints = self.minpoints
         return new
 
@@ -551,13 +563,8 @@ class MapProjection(object):
         return inv
 
     def predict(self, x, y):
-        import pyproj
-        fromcrs = pyproj.Proj(self.fromcrs)
-        tocrs = pyproj.Proj(self.tocrs)
-        predx,predy = pyproj.transform(fromcrs,
-                               tocrs,
-                               x, y)
-        return predx,predy
+        predx,predy = self._transformer.transform(x, y)
+        return np.array(predx),np.array(predy)
 
 
 

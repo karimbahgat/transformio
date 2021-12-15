@@ -16,6 +16,9 @@ def fitbounds(width, height, bounds):
     # define corner coordinates in pixel and geographic space
     imgcorners = [(0,0),(width,0),(width,height),(0,height)]
     bx1,by1,bx2,by2 = bounds
+    if bounds[1] < bounds[3]:
+        # flip y axis
+        bx1,by1,bx2,by2 = bx2,by2,bx1,by1
     geocorners = [(bx1,by1),(bx2,by1),(bx2,by2),(bx1,by2)]
     x1,y1 = zip(*imgcorners)
     x2,y2 = zip(*geocorners)

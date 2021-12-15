@@ -35,7 +35,7 @@ Transformio works by providing a set of classes for various types of transformat
     >>> ypred
     array([11., 15., 15.])
 
-Most transformations are created by fitting them to a set of observed input points and their equivalent points in the output coordinate system. So if we fit a new transform based on the input and output coordinates of the previous transform, we should end up with approximately the same transform: 
+Many transformations are created by fitting them to a set of observed input points and their equivalent points in the output coordinate system. So if we fit a new transform based on the input and output coordinates of the transform we created previously, we should end up with approximately the same transform: 
 
     >>> transfit = tio.transforms.Affine()
     >>> transfit.fit(x, y, xpred, ypred)
@@ -49,10 +49,15 @@ Most transformations are created by fitting them to a set of observed input poin
         [ 0.,  1., 10.],
         [ 0.,  0.,  1.]])
 
-All transformations have a JSON-compatible dictionary representation that allows them to be easily stored between sessions or transferred between application:
+All transformations have a JSON-compatible dictionary representation:
 
     >>> import json
     >>> datastring = json.dumps(trans.to_json())
+    >>> datastring
+    '{"type": "Affine", "params": {}, "data": {"A": [[1.0, 0.0, 10.0], [0.0, 1.0, 10.0], [0.0, 0.0, 1.0]]}}'
+
+This allows transformations to be easily stored between sessions or transferred between application:
+
     >>> recreated = tio.transforms.from_json(json.loads(datastring))
     >>> trans.A
     array([[ 1.,  0., 10.],
@@ -68,17 +73,72 @@ All transformations have a JSON-compatible dictionary representation that allows
 
 ### *Coordinate reprojection*
 
-So for the typical task of reprojecting a vector geometry, you would simply use the `transforms.Projection` transformation. While this essentially just uses the `pyproj` library in the background, we provide convenience functions for applying this to entire GeoJSON geometries:
+So for the typical task of reprojecting a vector geometry, you would simply use the `transforms.MapProjection` transformation. While this essentially just uses the `pyproj` library in the background, we provide convenience functions for applying this to entire GeoJSON geometries:
 
-...
+    >>> # define a geojson of points for every 10 lat/long coordinates
+    >>> points = []
+    >>> for y in range(-90, 90, 10):
+    ...     for x in range(-180, 180+1, 10):
+    ...         points.append((x,y))
+    >>> geoj = {'type':'MultiPoint', 'coordinates':points}
 
-In other cases, one might want to apply non-geographic/projection-based transformations, which is beyond the scope of the `pyproj` library. 
+    >>> # define a transformation from lat/long to an orthographic projection
+    >>> # ...of the globe as seen from space
+    >>> fromcrs = '+proj=longlat +datum=WGS84 +no_defs'
+    >>> tocrs = '+proj=ortho +lat_0=-10 +lon_0=30 +x_0=30 +y_0=-10'
+    >>> trans = tio.transforms.MapProjection(fromcrs, tocrs)
+
+    >>> # transform the points geojson
+    >>> newgeoj = tio.vector.transform(geoj, trans)
+
+Let's visualize this on top of a background layer to see what it looks like:
+
+    >>> # load the background layer
+    >>> from PIL import Image
+    >>> background = Image.open('tests/data/land_shallow_topo_2048.png')
+    >>> bounds = [-180,90,180,-90] # left,upper,right,bottom
+
+    >>> # render the original on top of the background
+    >>> im = background.copy()
+    >>> im = tio.utils.draw_geojson(geoj, im, bounds, fillcolor="red")
+    >>> im.save('tests/output/doctest-vector-gridpoints.png')
+
+    >>> # transform the background layer
+    >>> im = background.copy()
+    >>> im2geo = tio.imwarp.fitbounds(*im.size, bounds)
+    >>> imtrans = tio.transforms.Chain([im2geo,trans])
+    >>> im,affine = tio.imwarp.warp(im, imtrans)
+    >>> bounds = tio.imwarp.imbounds(*im.size, imtrans)
+
+    >>> # render the transform on top of the background
+    >>> im = tio.utils.draw_geojson(newgeoj, im, bounds, fillcolor="red")
+    >>> im.save('tests/output/doctest-vector-reprojection.png')
+
+Original                   |  Transformed
+:-------------------------:|:-------------------------:
+![Original image](/tests/output/doctest-vector-gridpoints.png) | ![Expected image](/tests/output/doctest-vector-reprojection.png)
 
 ### *Simple geometry adjustments*
 
-For instance, one might want to simply rotate, scale, or skew a set of geometries, e.g. for artistic or visualization purposes. This can be done easily using the 1st order `Polynomial` transform, also known as affine transform: 
+In other cases, one might want to apply non-geographic/projection-based transformations, which is beyond the scope of the `pyproj` library. For instance, one might want to simply rotate, scale, or skew a set of geometries, e.g. for artistic or visualization purposes. This can be done easily using the `Affine` transform: 
 
-... 
+    >>> # transform the background layer
+    >>> im = background.copy()
+    >>> trans = tio.transforms.Affine(rotate=45)
+    >>> imtrans = tio.transforms.Chain([im2geo,trans])
+    >>> im,affine = tio.imwarp.warp(im, imtrans)
+    >>> bounds = tio.imwarp.imbounds(*im.size, imtrans)
+
+    >>> # transform the points geojson
+    >>> newgeoj = tio.vector.transform(geoj, trans)
+
+    >>> # render the transform on top of the background
+    >>> im = tio.utils.draw_geojson(newgeoj, im, bounds, fillcolor="red")
+    >>> im.save('tests/output/doctest-vector-rotate.png')
+
+Original                   |  Transformed
+:-------------------------:|:-------------------------:
+![Original image](/tests/output/doctest-vector-gridpoints.png) | ![Expected image](/tests/output/doctest-vector-rotate.png)
 
 ### *Digitized geometry transformation*
 
@@ -107,9 +167,9 @@ For raster datasets which consist of regularly spaced grid cells, each cell or i
 
 There are two basic steps to this process that transformio handles behind the scenes. 
 
-The first is the process of mapping coordinates between the two coordinate systems. Forward or backward... 
+1. The first is the process of mapping coordinates between the two coordinate systems. Forward or backward... 
 
-The second is how to resample and interpolate the pixels. Currently, transformio only supports nearest neighbour resampling... 
+2. The second is how to resample and interpolate the pixels. Currently, transformio only supports nearest neighbour resampling... 
 
 ### *Raster reprojection*
 
@@ -169,7 +229,15 @@ Another common scenario is when performing georeferencing of scanned map images.
     >>> impoints = [(574, 304), (285, 854), (816, 934), (945, 96), (522, 114), (779, 241), (841, 302), (918, 384), (102, 411), (316, 444)]
     >>> geopoints = [(-0.86537, 14.22963), (-3.279831, 9.6586821), (1.133333, 8.983333), (2.4022, 15.9182), (-1.3094536, 15.8179117), (0.917385, 14.730746), (1.454179, 14.207113), (2.1098, 13.51366), (-4.895615, 13.303346), (-3.0694, 13.0725)]
 
-![Original image](/tests/data/burkina_pol96.jpg)
+    >>> # visualize on a map
+    >>> geoj = {'type':'MultiPoint', 'coordinates':impoints}
+    >>> w,h = im.size
+    >>> imbounds = [0,0,w,h]
+    >>> draw = im.copy()
+    >>> tio.utils.draw_geojson(geoj, draw, imbounds, fillcolor="red")
+    >>> draw.save('tests/output/doctest-map-controlpoints.png')
+
+![Original image](/tests/output/doctest-map-controlpoints.png)
 
 Based on these points we want to fit the map using a 2nd order polynomial transformation: 
 
@@ -184,6 +252,12 @@ Now just supply this transform to the `warp` function:
 
     >>> # warp the image
     >>> warped,affine = tio.imwarp.warp(im, trans)
+
+Let's see how the transformed map compares with the real-world geo-coordinates:
+
+    >>> geoj = {'type':'MultiPoint', 'coordinates':geopoints}
+    >>> bounds = tio.imwarp.imbounds(*warped.size, trans)
+    >>> tio.utils.draw_geojson(geoj, warped, bounds, fillcolor="red")
     >>> warped.save('tests/output/doctest-map-georeferencing.png')
 
 ![Expected image](/tests/output/doctest-map-georeferencing.png)
@@ -195,7 +269,7 @@ Remote sensing imagery from satellites or aircraft similarly needs to undergo a 
 
 ... 
 
-More advanced cases uses information about elevation and camera perspective to correct various distortions, but this is not yet supported here. 
+More advanced cases use information about elevation and camera perspective to correct various distortions, but this is not yet supported here. 
 
 
 ## Supported transformations
