@@ -1,13 +1,13 @@
 # Transformio
 
-Creates, applies, and evaluates coordinate transformations for geospatial data. 
+Transformio creates, applies, and evaluates coordinate transformations for vector and raster geospatial data. 
 
 
 ## Introduction
 
 The geospatial Python stack currently lacks a complete library for vector and raster coordinate transformation. 
 
-For vector geometries, the `pyproj` package supports transforming coordinates from one geographic or projected coordinate system (e.g. WGS84) to another (e.g. World Robinson). This is sufficient for most, but not all, cases of vector geometry transformation. 
+For vector geometries, the `pyproj` package supports transforming coordinates from one geographic or projected coordinate system (e.g. WGS84) to another (e.g. World Robinson). This is sufficient for many, but not all, cases of vector geometry transformation. 
 
 For raster grids, the `gdal` or `rasterio` packages can be used to register or rectify scanned map images or remote sensing imagery based on a set of ground control points. These packages, all based on the GDAL library, allow basic transformation based on 1st to 3rd order polynomials or thin-plate-splines. 
 
@@ -145,7 +145,7 @@ Alternatively, if the affine parameters are not explicitly provided, you may ins
 Next, we define a map projection transform for projecting the coordinate reference system of the original raster dataset into the target reference system: 
 
     >>> # define original to target projection transform
-    >>> fromcrs = '+proj=longlat +datum=WGS84 +no_defs ' #'epsg:4326'
+    >>> fromcrs = '+proj=longlat +datum=WGS84 +no_defs' #'epsg:4326'
     >>> tocrs = 'esri:54009'
     >>> geo2proj = tio.transforms.MapProjection(fromcrs, tocrs)
 
