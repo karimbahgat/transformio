@@ -279,9 +279,9 @@ The goal of transformio is to support a wide range of transformations useful to 
 First, let's define the map image we will be using: 
 
     >>> # load the image and control points
-    >>> im = Image.open('tests/data/burkina_pol96.jpg')
-    >>> impoints = [(574, 304), (285, 854), (816, 934), (945, 96), (522, 114), (779, 241), (841, 302), (918, 384), (102, 411), (316, 444)]
-    >>> geopoints = [(-0.86537, 14.22963), (-3.279831, 9.6586821), (1.133333, 8.983333), (2.4022, 15.9182), (-1.3094536, 15.8179117), (0.917385, 14.730746), (1.454179, 14.207113), (2.1098, 13.51366), (-4.895615, 13.303346), (-3.0694, 13.0725)]
+    >>> im = Image.open('tests/data/china_pol96.jpg')
+    >>> impoints = [(532, 64), (113, 112), (230, 161), (289, 107), (1018, 166), (611, 253), (108, 379), (866, 416), (1006, 470), (404, 502), (933, 583), (75, 645), (332, 638), (413, 694), (869, 701), (913, 717), (852, 738), (548, 749), (760, 779), (408, 924), (651, 935), (949, 942)]
+    >>> geopoints = [(101.621839, 56.161959), (71.44598, 51.1801), (80.26669, 50.42675), (83.76361, 53.36056), (135.08379, 48.48272), (106.88324, 47.90771), (68.04073, 33.12699), (119.70478, 31.94689), (129.04028, 35.10278), (94.900606, 36.406717), (121.05804, 29.32955), (78.715422, 21.426482), (91.1000101308, 29.6450238231), (96.86525, 21.09148), (121.7423789, 24.7184669), (121.56833333333, 25.03583333333), (118.080017048, 24.4499920847), (98.70707, 23.43771), (113.325010131, 23.1449813019), (111.2626075, 1.0875755), (107.59546, 16.4619), (125.567222, 8.805556)]
 
     >>> # create and fit the transform model
     >>> imx,imy = zip(*impoints)
@@ -297,7 +297,7 @@ Map projection transforms are specified using the proj4 strings of the source an
     
     >>> # define original to target projection transform
     >>> fromcrs = '+proj=longlat +datum=WGS84 +no_defs ' #'epsg:4326'
-    >>> tocrs = 'EPSG:32631'
+    >>> tocrs = '+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m no_defs'
     >>> geo2proj = tio.transforms.MapProjection(fromcrs, tocrs)
 
     >>> # warp the image
