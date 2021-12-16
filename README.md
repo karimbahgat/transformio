@@ -118,7 +118,7 @@ Original                   |  Transformed
 :-------------------------:|:-------------------------:
 ![Original image](/tests/output/doctest-vector-gridpoints.png) | ![Expected image](/tests/output/doctest-vector-reprojection.png)
 
-### *Simple geometry adjustments*
+### *Simple geometry manipulations*
 
 In other cases, one might want to apply non-geographic/projection-based transformations, which is beyond the scope of the `pyproj` library. For instance, one might want to simply rotate, scale, or skew a set of geometries, e.g. for artistic or visualization purposes. This can be done easily using the `Affine` transform: 
 
@@ -140,26 +140,67 @@ Original                   |  Transformed
 :-------------------------:|:-------------------------:
 ![Original image](/tests/output/doctest-vector-gridpoints.png) | ![Expected image](/tests/output/doctest-vector-rotate.png)
 
+### *Systematic bias correction*
+
+One of the situations where this becomes useful, is when needing to make adjusts or corrections to a dataset. For instance, if we have the boundary data for a subnational administrative boundary, but notice through visual inspection that it is systematically biased or offset in the southward and westward direction when compared to some reference data. This type of error can often happen if the underlaying map data which was used to digitize the data was georeferenced incorrectly. We can then easily offset this bias by using an Affine transform:
+
+    >>> # first load the data
+    >>> data = json.loads(open('tests/data/ARM-ADM1-Lori-Natural_Earth.geojson').read())['geometry']
+    >>> reference = json.loads(open('tests/data/ARM-ADM1-Lori-IPUMS.geojson').read())['geometry']
+
+    >>> # visualize the original bias
+    >>> im,bounds = tio.utils.draw_geojson(reference, fillcolor=(0,0,255,120), outlinecolor=(0,0,255), outlinewidth=3)
+    >>> tio.utils.draw_geojson(data, im, bounds, fillcolor=None, outlinecolor=(255,0,0), outlinewidth=3)
+    >>> im.save('tests/output/doctest-vector-bias-orig.png')
+
+    >>> # correct the bias
+    >>> trans = tio.transforms.Affine(offset=(0.025,0.025))
+    >>> data = tio.vector.transform(data, trans)
+
+    >>> # visualize the correction
+    >>> im,bounds = tio.utils.draw_geojson(reference, fillcolor=(0,0,255,120), outlinecolor=(0,0,255), outlinewidth=3)
+    >>> tio.utils.draw_geojson(data, im, bounds, fillcolor=None, outlinecolor=(255,0,0), outlinewidth=3)
+    >>> im.save('tests/output/doctest-vector-bias-corrected.png')
+
+Biased                   |  Corrected
+:-------------------------:|:-------------------------:
+![Original image](/tests/output/doctest-vector-bias-orig.png) | ![Expected image](/tests/output/doctest-vector-bias-corrected.png)
+
 ### *Digitized geometry transformation*
 
-A more practical example is when digitizing the data contents of a scanned map image or remote sensing imagery. In these cases the extracted geometry coordinates are sometimes stored as pixel coordinates, but needs to be transformed to geographic space based on the georeferencing information of the source imagery. For instance, if the source image coordinate system is defined by a 2nd order polynomial function, the extracted vector geomtries are transformed as follows:
+Another example is when digitizing the data contents of a scanned map image or remote sensing imagery. If the digitized geometry coordinates were recorded in image space using pixel coordinates, they would need to be transformed to geographic space based on the georeferencing information of the source imagery. For instance, if the source image coordinate system was georeferenced using a 2nd order polynomial function, the extracted vector geometries are transformed as follows:
 
-... 
+    >>> # first load the digitized data
+    >>> digitized = json.loads(open('tests/data/argentina_pol96_digitized.geojson').read())
 
-### *Dataset integration and bias correction*
+    >>> # visualize the digitized data in image space
+    >>> im = Image.open('tests/data/argentina_pol96.jpg')
+    >>> w,h = im.size
+    >>> imbounds = [0,0,w,h]
+    >>> draw = im.copy()
+    >>> tio.utils.draw_geojson(digitized, draw, imbounds, fillcolor=(0,0,255,120), outlinecolor=(0,0,255), outlinewidth=5)
+    >>> draw.save('tests/output/doctest-vector-digitized-orig.png')
 
-One of the cool things this allows, is easily integrating one dataset with another dataset, e.g. if through visual inspection we see that one of the datasets is biased or offset in some way. One of the ways this bias can be determined is by measuring the closest point in another reference dataset that we know to be correct:
+    >>> # next load the transform parameters determined through georeferencing
+    >>> with open('tests/data/argentina_pol96_georeferenced_transform.json') as r:
+    ...     transinfo = json.loads(r.read())
+    >>> forw = transinfo['forward']['data']['A']
+    >>> back = transinfo['backward']['data']['A']
+    >>> trans = tio.transforms.Polynomial(A=forw, Ainv=back)
 
-...
+    >>> # transform the digitized data to geographic space
+    >>> digitized = tio.vector.transform(digitized, trans)
 
-We can then estimate a transform based on these equivalent points: 
+    >>> # visualize the digitized data in transformed geographic space
+    >>> warped,affine = tio.imwarp.warp(im, trans)
+    >>> bounds = tio.imwarp.imbounds(*im.size, trans)
+    >>> draw = warped.copy()
+    >>> tio.utils.draw_geojson(digitized, draw, bounds, fillcolor=(0,0,255,120), outlinecolor=(0,0,255), outlinewidth=5)
+    >>> draw.save('tests/output/doctest-vector-digitized-transformed.png')
 
-...
-
-Finally, the resulting transform can be used to correct the biased dataset: 
-
-... 
-
+Image space                   |  Geographic space
+:-------------------------:|:-------------------------:
+![Original image](/tests/output/doctest-vector-digitized-orig.png) | ![Expected image](/tests/output/doctest-vector-digitized-transformed.png)
 
 ## Transforming raster grids
 
