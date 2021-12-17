@@ -2,6 +2,8 @@
 
 Transformio creates, applies, and evaluates coordinate transformations for vector and raster geospatial data. 
 
+WARNING: This library is still in early development, so the final API has not yet been settled on and currently contains several unresolved bugs. 
+
 
 ## Introduction
 
@@ -306,9 +308,40 @@ Let's see how the transformed map compares with the real-world geo-coordinates:
 
 ### *Remote sensing image registration/rectification*
 
-Remote sensing imagery from satellites or aircraft similarly needs to undergo a process of registration or rectification that adjusts and defines the coordinates of the image. Due to the large volumes of imagery this is often done automatically using sophisticated algorithms to identify control points based on pixel correlations across imagery. The output control points of these automated algorithms are then used to fit a transformation function and warp the image in the same way as before:
+Remote sensing imagery from satellites or aircraft similarly needs to undergo a process of registration or rectification that adjusts and defines the coordinates of the image. This can be done either manually by matching distinct point features, or automatically based on pixel region correlations with known imagery. The identified control points are then used to fit a transformation function and warp the image in the same way as before:
 
-... 
+    >>> # first load image
+    >>> im = Image.open('tests/data/satim-volcano.jpg')
+    >>> impoints = [(361,1814),(834,845),(1490,1688),(1925,1461),(1365,916)]
+    >>> geopoints = [(158.5327148376,53.0651510535),(158.7098693793,53.3199366405),(159.0422058051,53.097322592),(159.2344665472,53.1582999509),(158.9859008734,53.3046210736)]
+
+    >>> # visualize on a map
+    >>> geoj = {'type':'MultiPoint', 'coordinates':impoints}
+    >>> w,h = im.size
+    >>> imbounds = [0,0,w,h]
+    >>> draw = im.copy()
+    >>> tio.utils.draw_geojson(geoj, draw, imbounds, fillcolor="red", fillsize=15)
+    >>> draw.save('tests/output/doctest-satim-controlpoints.png')
+
+![Landsat 8 satellite image of Petropavlovsk-Kamchatsky. Source URL: https://innoter.com/upload/iblock/33f/20130824-%D0%9F%D0%B5%D1%82%D1%80%D0%BE%D0%BF%D0%B0%D0%B2%D0%BB%D0%BE%D0%B2%D1%81%D0%BA-%D0%9A%D0%B0%D0%BC%D1%87%D0%B0%D1%82%D1%81%D0%BA%D0%B8%D0%B9.jpg](/tests/output/doctest-satim-controlpoints.png)
+
+    >>> # create and fit the transform model
+    >>> imx,imy = zip(*impoints)
+    >>> geox,geoy = zip(*geopoints)
+    >>> trans = tio.transforms.Polynomial()
+    >>> trans.fit(imx, imy, geox, geoy)
+    Polynomial Transform(order=1, estimated=True)
+
+    >>> # warp the image
+    >>> warped,affine = tio.imwarp.warp(im, trans)
+
+    >>> # visualize on the map
+    >>> geoj = {'type':'MultiPoint', 'coordinates':geopoints}
+    >>> bounds = tio.imwarp.imbounds(*warped.size, trans)
+    >>> tio.utils.draw_geojson(geoj, warped, bounds, fillcolor="red", fillsize=15)
+    >>> warped.save('tests/output/doctest-satim-georeferenced.png')
+
+![Expected image](/tests/output/doctest-satim-georeferenced.png)
 
 More advanced cases use information about elevation and camera perspective to correct various distortions, but this is not yet supported here. 
 
@@ -347,17 +380,31 @@ Map projection transforms are specified using the proj4 strings of the source an
 
 ![Expected image](/tests/output/doctest-transforms-mapprojection.png)
 
-### *Similarity transformations*
-
-...
-
 ### *Affine transformations*
 
-...
+Affine transformations allow for simple transformations such as offset, scale, skew, and rotation: 
 
-### *Projective transformations*
+    # offset the x axis by 10
+    >>> trans = tio.transforms.Affine(offset=(10,0))
+    >>> warped,affine = tio.imwarp.warp(im, trans)
+    >>> warped.save('tests/output/doctest-transforms-affine-offset.png')
 
-...
+    # scale the x axis to double length
+    >>> trans = tio.transforms.Affine(scale=(2,1))
+    >>> warped,affine = tio.imwarp.warp(im, trans)
+    >>> warped.save('tests/output/doctest-transforms-affine-scale.png')
+
+    # skew
+    # ... 
+
+    # rotate image by 45 degrees
+    >>> trans = tio.transforms.Affine(rotate=45)
+    >>> warped,affine = tio.imwarp.warp(im, trans)
+    >>> warped.save('tests/output/doctest-transforms-affine-rotate.png')
+
+Offset          |  Scale         |  Rotate
+:--------------:|:--------------:|:------------:
+![Expected image](/tests/output/doctest-transforms-affine-offset.png) | ![Expected image](/tests/output/doctest-transforms-affine-scale.png) | ![Expected image](/tests/output/doctest-transforms-affine-rotate.png)
 
 ### *Polynomial transformations*
 
@@ -370,11 +417,9 @@ Polynomial transforms are typically performed using the 1st, 2nd, or 3rd order, 
     ...     warped,affine = tio.imwarp.warp(im, trans)
     ...     warped.save('tests/output/doctest-transforms-polynomial-{}.png'.format(order))
 
-![Expected image](/tests/output/doctest-transforms-polynomial-1.png)
-
-![Expected image](/tests/output/doctest-transforms-polynomial-2.png)
-
-![Expected image](/tests/output/doctest-transforms-polynomial-3.png)
+1st order       |  2nd order     |  3rd order
+:--------------:|:--------------:|:------------:
+![Expected image](/tests/output/doctest-transforms-polynomial-1.png) | ![Expected image](/tests/output/doctest-transforms-polynomial-2.png) | ![Expected image](/tests/output/doctest-transforms-polynomial-3.png)
 
 If you don't specify the order of your polynomial transform, this will be determined automatically based on the minimum number of required control points. 
 
@@ -392,10 +437,6 @@ TIN (triangulated irregular network) transforms, also known as the piecewise aff
     >>> warped.save('tests/output/doctest-transforms-tin.png')
 
 ![Expected image](/tests/output/doctest-transforms-tin.png)
-
-### *Chained transformations*
-
-...
 
 
 ## Accuracy evaluation
