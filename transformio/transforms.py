@@ -125,7 +125,7 @@ class Polynomial(object):
         params = {'order': self.order}
         data = {'A': self.A.tolist() }
         if self.Ainv is not None:
-            data['Ainv'] = self.Ainv
+            data['Ainv'] = self.Ainv.tolist()
         info = {'type': 'Polynomial',
                 'params': params,
                 'data': data,
