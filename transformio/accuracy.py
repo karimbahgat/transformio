@@ -89,12 +89,13 @@ def loo_residuals(transform, inpoints, outpoints, distance='euclidean'):
 
 
 # accuracy
+# MAYBE: remove this in favor of a two-liner residual+metric... 
 def model_accuracy(trans, inpoints, outpoints, leave_one_out=False, distance='euclidean', metric='rmse'):
     # convenience function
     resfunc = loo_residuals if leave_one_out else residuals
     predicted,resids = resfunc(trans, inpoints, outpoints, distance) 
 
-    accfunc = {'rmse':RMSE, 'mae':MAE}[metric.lower()]
+    accfunc = {'rmse':RMSE, 'mae':MAE, 'max':MAX}[metric.lower()]
     err = accfunc(resids)
 
     return predicted, resids, err
@@ -102,7 +103,7 @@ def model_accuracy(trans, inpoints, outpoints, leave_one_out=False, distance='eu
 
 # auto refinement
 
-def drop_worst_model(trans, inpoints, outpoints, leave_one_out=False, invert=False, distance=None, accuracy='rmse'):
+def drop_worst_model(trans, inpoints, outpoints, leave_one_out=False, distance=None, metric='rmse'):
     inpoints = list(inpoints)
     outpoints = list(outpoints)
     trans = trans.copy()
@@ -115,23 +116,23 @@ def drop_worst_model(trans, inpoints, outpoints, leave_one_out=False, invert=Fal
         _outpoints = list(outpoints)
         _outpoints.remove(outp)
 
-        err,resids = model_accuracy(trans, _inpoints, _outpoints, leave_one_out=leave_one_out, invert=invert, distance=distance, accuracy=accuracy)
+        predicted,resids,err = model_accuracy(trans, _inpoints, _outpoints, leave_one_out=leave_one_out, distance=distance, metric=metric)
         
-        errs.append((inp,outp,err,resids))
+        errs.append((inp,outp,predicted,resids,err))
 
     # drop the gcp leading to lowest error if dropped
-    inp,outp,err,resids = sorted(errs, key=lambda i_o_e_r: i_o_e_r[2])[0] 
+    inp,outp,predicted,resids,err = sorted(errs, key=lambda i_o_p_r_e: i_o_p_r_e[-1])[0] 
     inpoints.remove(inp)
     outpoints.remove(outp)
 
     # refit model with remaining points before returning
     inx,iny = zip(*inpoints)
     outx,outy = zip(*outpoints)
-    trans.fit(inx, iny, outx, outy, invert=invert)
+    trans.fit(inx, iny, outx, outy)
     
-    return trans, inpoints, outpoints, err, resids
+    return trans, inpoints, outpoints, predicted, resids, err
 
-def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoints=None, leave_one_out=False, invert=False, distance=None, accuracy='rmse', verbose=False):
+def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoints=None, leave_one_out=False, distance=None, metric='rmse', verbose=False):
     _inpoints = list(inpoints)
     _outpoints = list(outpoints)
     trans = trans.copy()
@@ -142,9 +143,9 @@ def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoin
     minpoints = max(minpoints, trans.minpoints)
 
     # initial error
-    err,resids = model_accuracy(trans, _inpoints, _outpoints,
-                                leave_one_out, invert, distance, accuracy)
-    seq.append((trans, _inpoints, _outpoints, err, resids))
+    predicted,resids,err = model_accuracy(trans, _inpoints, _outpoints,
+                                        leave_one_out, distance, metric)
+    seq.append((trans, _inpoints, _outpoints, predicted, resids, err))
     if verbose:
         print(trans)
         print('init error',err)
@@ -153,29 +154,29 @@ def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoin
     while len(_inpoints) > minpoints: #for _ in range(len(inpoints)-trans.minpoints):
         if verbose:
             print(len(_inpoints))
-        _trans,_inpoints,_outpoints,_err,_resids = drop_worst_model(trans, _inpoints, _outpoints,
-                                                                    leave_one_out, invert, distance, accuracy)
+        _trans,_inpoints,_outpoints,_predicted,_resids,_err = drop_worst_model(trans, _inpoints, _outpoints,
+                                                                                leave_one_out, distance, metric)
         if verbose:
             print('new error',_err)
         
-        _preverr = seq[-1][-2]
+        _preverr = seq[-1][-1]
         impr = (_err-_preverr)/float(_preverr)
         if impr > -improvement_ratio:
             # no longer improving, exit
             break
 
-        seq.append((_trans,_inpoints,_outpoints,_err,_resids))
+        seq.append((_trans,_inpoints,_outpoints,_predicted,_resids,_err))
 
     # refit model
-    _trans,_inpoints,_outpoints,_err,_resids = seq[-1]
+    _trans,_inpoints,_outpoints,_predicted,_resids,_err = seq[-1]
     inx,iny = zip(*_inpoints)
     outx,outy = zip(*_outpoints)
-    _trans.fit(inx, iny, outx, outy, invert=invert)
+    _trans.fit(inx, iny, outx, outy)
 
     # should we return list of errors and points?
     # ...
 
-    return _trans, _inpoints, _outpoints, _err, _resids
+    return _trans, _inpoints, _outpoints, _predicted, _resids, _err
 
 def auto_choose_model(inpoints, outpoints, transforms, refine_outliers=True, **kwargs):
     # compare and choose optimal among a set of transforms

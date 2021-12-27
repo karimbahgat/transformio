@@ -571,9 +571,24 @@ Because of these problems with the traditional within-sample model residuals, a 
 
 ## Control point outliers
 
-The ground control points used to fit transformation models are often noisy and contain outliers, resulting in an adverse effect on the fitted transform. Therefore, we need efficient and automated ways to detect and exclude these. Transformio includes a set of functions to help with this. 
+The ground control points used to fit transformation models are often noisy and contain outliers, resulting in an adverse effect on the fitted transform. Therefore, we need efficient and automated ways to detect and exclude these. Transformio includes a set of functions to help with this. Let's start with the full set of 22 control points for an affine transform: 
 
-...
+    >>> # get the error associated with all control points
+    >>> trans = tio.transforms.Affine()
+    >>> predicted,resids = tio.accuracy.residuals(trans, impoints, geopoints, distance='geodesic')
+    >>> 'Control points: {}'.format(len(impoints))
+    'Control points: 22'
+    >>> 'RMSE: {:.9f} km'.format(tio.accuracy.RMSE(resids))
+    'RMSE: 611.209296883 km'
+
+To improve this accuracy we can compare the different control points and drop the one whose exclusion best improves the accuracy metric. We can do this continually until the model stops improving beyond a given threshold: 
+
+    >>> # continually drop the control point with the worst performing model
+    >>> _trans, _impoints, _geopoints, _predicted, _resids, _err = tio.accuracy.auto_drop_models(trans, impoints, geopoints, distance='geodesic', improvement_ratio=0.10)
+    >>> 'Control points: {}'.format(len(_impoints))
+    'Control points: 19'
+    >>> 'RMSE: {:.9f} km'.format(tio.accuracy.RMSE(_resids))
+    'RMSE: 333.882194848 km'
 
 
 ## Model selection
