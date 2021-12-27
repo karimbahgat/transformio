@@ -4,7 +4,7 @@ import math
 
 # residuals
 
-def distances(obsx, obsy, predx, predy, metric='eucledian'):
+def distances(obsx, obsy, predx, predy, metric='euclidean'):
     # to arrays
     obsx = np.array(obsx)
     obsy = np.array(obsy)
@@ -12,8 +12,8 @@ def distances(obsx, obsy, predx, predy, metric='eucledian'):
     predy = np.array(predy)
 
     # calc distances
-    if metric == 'eucledian':
-        # eucledian distances
+    if metric == 'euclidean':
+        # euclidean distances
         resids = np.sqrt((predx - obsx)**2 + (predy - obsy)**2)
     elif metric == 'geodesic':
         # geodesic is geodesic distance between lat-lon coordinates
@@ -38,7 +38,7 @@ def distances(obsx, obsy, predx, predy, metric='eucledian'):
 
     return resids
 
-def residuals(transform, inpoints, outpoints, distance='eucledian'):
+def residuals(transform, inpoints, outpoints, distance='euclidean'):
     # fit
     inx,iny = zip(*inpoints)
     outx,outy = zip(*outpoints)
@@ -56,7 +56,7 @@ def residuals(transform, inpoints, outpoints, distance='eucledian'):
 
     return list(zip(predx,predy)), resids
 
-def loo_residuals(transform, inpoints, outpoints, distance='eucledian'):
+def loo_residuals(transform, inpoints, outpoints, distance='euclidean'):
     # leave-one-out bootstrap method (out of sample)
     # residual is difference bw predicted point when refitting the model without each point
     predpoints = []
@@ -89,7 +89,7 @@ def loo_residuals(transform, inpoints, outpoints, distance='eucledian'):
 
 
 # accuracy
-def model_accuracy(trans, inpoints, outpoints, leave_one_out=False, distance='eucledian', metric='rmse'):
+def model_accuracy(trans, inpoints, outpoints, leave_one_out=False, distance='euclidean', metric='rmse'):
     # convenience function
     resfunc = loo_residuals if leave_one_out else residuals
     predicted,resids = resfunc(trans, inpoints, outpoints, distance) 

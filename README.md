@@ -484,7 +484,7 @@ For instance, let's say we have a set of control points and want to know how wel
 
 We can also do this in the backward direction and calculate the pixel sampling errors for each control point. To do so, we try to predict in the opposite direction, i.e. predicting the input pixel coordinates based on the output geographic coordinates. The errors are then measured as the eucliedian distance between the original and predicted input pixel coordinates: 
 
-    >>> predicted,resids = tio.accuracy.residuals(trans, geopoints, impoints, distance='eucledian')
+    >>> predicted,resids = tio.accuracy.residuals(trans, geopoints, impoints, distance='euclidean')
     >>> 'RMSE: {} pixels'.format(tio.accuracy.RMSE(resids))
     'RMSE: 102.14884780375236 pixels'
     >>> 'MAE: {} pixels'.format(tio.accuracy.MAE(resids))
@@ -533,7 +533,7 @@ An important aspect to note about within-sample residuals and accuracy metrics i
     >>> trans = tio.transforms.MapProjection(fromcrs, tocrs)
     >>> projx,projy = trans.predict(*zip(*geopoints))
     >>> projpoints = list(zip(projx,projy))
-    >>> predicted,resids = tio.accuracy.residuals(trans, geopoints, projpoints, distance='eucledian')
+    >>> predicted,resids = tio.accuracy.residuals(trans, geopoints, projpoints, distance='euclidean')
     >>> 'RMSE: {:.9f} m'.format(tio.accuracy.RMSE(resids))
     'RMSE: 0.000000000 m'
 
@@ -558,7 +558,7 @@ Because of these problems with the traditional within-sample model residuals, a 
     >>> trans = tio.transforms.MapProjection(fromcrs, tocrs)
     >>> projx,projy = trans.predict(*zip(*geopoints))
     >>> projpoints = list(zip(projx,projy))
-    >>> predicted,resids = tio.accuracy.loo_residuals(trans, geopoints, projpoints, distance='eucledian')
+    >>> predicted,resids = tio.accuracy.loo_residuals(trans, geopoints, projpoints, distance='euclidean')
     >>> 'RMSE: {:.9f} km'.format(tio.accuracy.RMSE(resids))
     'RMSE: 0.000000000 km'
 
