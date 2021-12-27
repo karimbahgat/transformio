@@ -38,32 +38,25 @@ def distances(obsx, obsy, predx, predy, metric='eucledian'):
 
     return resids
 
-def residuals(transform, inpoints, outpoints, invert=False, distance='eucledian'):
+def residuals(transform, inpoints, outpoints, distance='eucledian'):
     # fit
     inx,iny = zip(*inpoints)
     outx,outy = zip(*outpoints)
-    transform.fit(inx, iny, outx, outy, invert=invert)
+    transform.fit(inx, iny, outx, outy)
     
     # residual is difference bw model prediction and observed output
-    if invert:
-        outx,outy = zip(*outpoints)
-        predx,predy = transform.predict(outx,outy)
-    else:
-        inx,iny = zip(*inpoints)
-        predx,predy = transform.predict(inx,iny)
+    inx,iny = zip(*inpoints)
+    predx,predy = transform.predict(inx,iny)
 
     # determine observed reference points
-    if invert:
-        obsx,obsy = zip(*inpoints) # inpoints are the ones being compared
-    else:
-        obsx,obsy = zip(*outpoints) # outpoints are the ones being compared
+    obsx,obsy = zip(*outpoints) # outpoints are the ones being compared
 
     # calc distances
     resids = distances(obsx, obsy, predx, predy, distance)
 
-    return resids
+    return list(zip(predx,predy)), resids
 
-def loo_residuals(transform, inpoints, outpoints, invert=False, distance='eucledian'):
+def loo_residuals(transform, inpoints, outpoints, distance='eucledian'):
     # leave-one-out bootstrap method (out of sample)
     # residual is difference bw predicted point when refitting the model without each point
     predpoints = []
@@ -76,42 +69,35 @@ def loo_residuals(transform, inpoints, outpoints, invert=False, distance='eucled
 
         inx,iny = zip(*_inpoints)
         outx,outy = zip(*_outpoints)
-        transform.fit(inx, iny, outx, outy, invert=invert)
+        transform.fit(inx, iny, outx, outy)
 
         # calc err bw observed outpoint and predicted outpoint (in sample)
-        if invert:
-            outx,outy = outpoint
-            predx,predy = transform.predict([outx], [outy])
-        else:
-            inx,iny = inpoint
-            predx,predy = transform.predict([inx], [iny])
+        inx,iny = inpoint
+        predx,predy = transform.predict([inx], [iny])
         predpoints.append((predx[0], predy[0]))
 
     # predicted points
     predx,predy = zip(*predpoints)
 
     # determine observed reference points
-    if invert:
-        obsx,obsy = zip(*inpoints) # inpoints are the ones being compared
-    else:
-        obsx,obsy = zip(*outpoints) # outpoints are the ones being compared
+    obsx,obsy = zip(*outpoints) # outpoints are the ones being compared
 
     # calc distances
     resids = distances(obsx, obsy, predx, predy, distance)
 
-    return resids
+    return predpoints, resids
 
 
 # accuracy
-def model_accuracy(trans, inpoints, outpoints, leave_one_out=False, invert=False, distance='eucledian', accuracy='rmse'):
+def model_accuracy(trans, inpoints, outpoints, leave_one_out=False, distance='eucledian', metric='rmse'):
     # convenience function
     resfunc = loo_residuals if leave_one_out else residuals
-    resids = resfunc(trans, inpoints, outpoints, invert, distance) 
+    predicted,resids = resfunc(trans, inpoints, outpoints, distance) 
 
-    accfunc = {'rmse':RMSE, 'mae':MAE}[accuracy.lower()]
+    accfunc = {'rmse':RMSE, 'mae':MAE}[metric.lower()]
     err = accfunc(resids)
 
-    return err, resids
+    return predicted, resids, err
 
 
 # auto refinement
@@ -256,10 +242,14 @@ def auto_choose_model(inpoints, outpoints, transforms, refine_outliers=True, **k
 
 def RMSE(residuals):
     residuals = np.array(residuals)
+    invalid = np.isnan(residuals) | np.isinf(residuals)
+    residuals = residuals[~invalid]
     return math.sqrt( (residuals**2).sum() / float(residuals.shape[0]) )
 
 def MAE(residuals):
     residuals = np.array(residuals)
+    invalid = np.isnan(residuals) | np.isinf(residuals)
+    residuals = residuals[~invalid]
     return abs(residuals).sum() / float(residuals.shape[0])
 
 

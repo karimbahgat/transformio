@@ -443,7 +443,123 @@ TIN (triangulated irregular network) transforms, also known as the piecewise aff
 
 An important but often overlooked aspect of coordinate transformation such as map georeferencing is the impact it has on accuracy or error. Transformio has key functionality for evaluating the accuracy of a transformation, so that the overall confidence in the final product can be evaluated. This functionality is contained in the `accuracy` module. 
 
-...
+### Within-sample model fit residual errors
+
+To measure the model fit accuracy of a particular transform, we take the control points that we want to evaluate and measure the residual errors between the observed and predicted coordinates in either forward or backward direction. 
+
+For instance, let's say we have a set of control points and want to know how well an Affine transform would predict the forward geographic coordinates. If the geographic coordinates are given in latitude-longitude coordinates, the errors are measured using geodesic distances, and can be summarized using the commonly used root-mean-square-error (RMSE) metric:
+
+    >>> trans = tio.transforms.Affine()
+    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, impoints, geopoints, distance='geodesic', metric='rmse')
+    >>> 'RMSE: {} km'.format(toterr)
+    'RMSE: 611.209296883062 km'
+    >>> for obs,pred,resid in zip(geopoints,predicted,resids):
+    ...     'Observed {}; Predicted {}; Residual {} km'.format(obs,pred,resid)
+    'Observed (101.621839, 56.161959); Predicted (98.6393264938272, 55.091630511199774); Residual 221.69318994970638 km'
+    'Observed (71.44598, 51.1801); Predicted (74.59316421331444, 51.141083116350664); Residual 219.35642072534165 km'
+    'Observed (80.26669, 50.42675); Predicted (81.66038500705729, 49.062378867594916); Residual 181.660439958306 km'
+    'Observed (83.76361, 53.36056); Predicted (84.77938680649493, 52.02740211534941); Residual 163.1762934535337 km'
+    'Observed (135.08379, 48.48272); Predicted (127.42165015818279, 51.63428657700119); Residual 648.6969056485497 km'
+    'Observed (106.88324, 47.90771); Predicted (104.29233031094, 45.73824387979517); Residual 311.3013446554603 km'
+    'Observed (68.04073, 33.12699); Predicted (75.81187709158846, 37.50926969298354); Residual 856.0361583885884 km'
+    'Observed (119.70478, 31.94689); Predicted (120.01287943355501, 38.34193058379296); Residual 711.1994311343066 km'
+    'Observed (129.04028, 35.10278); Predicted (128.44320342365774, 36.090794384765225); Residual 122.33204240889039 km'
+    'Observed (94.900606, 36.406717); Predicted (93.68588357119687, 32.29957072259194); Residual 469.8017282067807 km'
+    'Observed (121.05804, 29.32955); Predicted (124.84511290742313, 30.067238125275654); Residual 374.6176340935597 km'
+    'Observed (78.715422, 21.426482); Predicted (75.3999079060918, 23.827998152433587); Residual 432.25107259271533 km'
+    'Observed (91.1000101308, 29.6450238231); Predicted (90.2758097544798, 25.106870895335863); Residual 510.8130011737935 km'
+    'Observed (96.86525, 21.09148); Predicted (95.29326437565582, 22.542103138695992); Residual 228.65743905727612 km'
+    'Observed (121.7423789, 24.7184669); Predicted (121.79761020536966, 23.82102670605594); Residual 99.88497001009252 km'
+    'Observed (121.56833333333, 25.03583333333); Predicted (124.44165076854335, 23.16305825090263); Residual 358.11836925811156 km'
+    'Observed (118.080017048, 24.4499920847); Predicted (121.02008246244293, 21.873474216145553); Residual 414.94464704323633 km'
+    'Observed (98.70707, 23.43771); Predicted (103.43905560010793, 20.222041777413985); Residual 604.8616827846928 km'
+    'Observed (113.325010131, 23.1449813019); Predicted (115.91239894121175, 19.452915611489544); Residual 489.95457834099403 km'
+    'Observed (111.2626075, 1.0875755); Predicted (96.30287917563957, 10.79685687946862); Residual 1972.5992842092362 km'
+    'Observed (107.59546, 16.4619); Predicted (110.46798903128736, 11.107716981709608); Residual 670.8445533127542 km'
+    'Observed (125.567222, 8.805556); Predicted (127.80251840498426, 11.81983575661313); Residual 414.61814484015173 km'
+
+We can also do this in the backward direction and calculate the pixel sampling errors for each control point. To do so, we try to predict in the opposite direction, i.e. predicting the input pixel coordinates based on the output geographic coordinates. The errors are then measured as the eucliedian distance between the original and predicted input pixel coordinates: 
+
+    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, geopoints, impoints, distance='eucledian', metric='rmse')
+    >>> 'RMSE: {} pixels'.format(toterr)
+    'RMSE: 102.14884780375236 pixels'
+
+    >>> for obs,pred,resid in zip(impoints,predicted,resids):
+    ...     'Observed {}; Predicted {}; Residual {} pixels'.format(obs,pred,resid)
+    'Observed (532, 64); Predicted (591.4781711914964, 77.04904444945544); Residual 60.89277797349051 pixels'
+    'Observed (113, 112); Predicted (92.71422935067517, 138.36979089162185); Residual 33.2697815217484 pixels'
+    'Observed (230, 161); Predicted (233.97117489193306, 160.82567814611969); Residual 3.974999135982274 pixels'
+    'Observed (289, 107); Predicted (296.60869896990744, 110.65453744457739); Residual 8.4408497172079 pixels'
+    'Observed (1018, 166); Predicted (1117.4464383985583, 250.34757372576723); Residual 130.3997979430259 pixels'
+    'Observed (611, 253); Predicted (659.710242442967, 233.07850407823537); Residual 52.62654956021256 pixels'
+    'Observed (108, 379); Predicted (0.5173615544460972, 464.9375363425153); Residual 137.61459849826542 pixels'
+    'Observed (866, 416); Predicted (834.5145394487631, 537.3928148933994); Residual 125.40952808246521 pixels'
+    'Observed (1006, 470); Predicted (992.1323082955646, 488.91412195029955); Residual 23.453291503754212 pixels'
+    'Observed (404, 502); Predicted (442.1019983917863, 431.45714748138187); Residual 80.17516026121304 pixels'
+    'Observed (933, 583); Predicted (851.0492661778035, 586.5578495097557); Residual 82.02792858003043 pixels'
+    'Observed (75, 645); Predicted (149.31246533392755, 689.2796986791675); Residual 86.5045329397486 pixels'
+    'Observed (332, 638); Predicted (366.68854841347365, 551.2840130071816); Residual 93.39677612836839 pixels'
+    'Observed (413, 694); Predicted (442.4630464124066, 713.2793864556681); Residual 35.21030880305688 pixels'
+    'Observed (869, 701); Predicted (852.660810312578, 671.4998003086648); Residual 33.722854290083625 pixels'
+    'Observed (913, 717); Predicted (850.4947097647739, 665.5284714653851); Residual 80.97054746683835 pixels'
+    'Observed (852, 738); Predicted (792.8174030531827, 672.7987866126248); Residual 88.05553934055179 pixels'
+    'Observed (548, 749); Predicted (477.0987283346137, 672.2160467927424); Residual 104.51203659819872 pixels'
+    'Observed (760, 779); Predicted (713.1562617389629, 691.9642926744355); Residual 98.8410348181861 pixels'
+    'Observed (408, 924); Predicted (634.4778010810271, 1093.033534780046); Residual 282.60313208231486 pixels'
+    'Observed (651, 935); Predicted (606.6752262835507, 808.4545088766896); Residual 134.0837308872865 pixels'
+    'Observed (949, 942); Predicted (881.9105701575786, 966.0768614342543); Residual 71.27893695268935 pixels'
+
+### Leave-one-out model prediction residual errors
+
+An important aspect to note about within-sample residuals and accuracy metrics is that they are not comparable across different transform model types, since each transform type has a different level of fit to the observed data. For instance, higher order polynomial transforms have a closer fit to the data and therefore lower residual errors than lower order ones. Map projection transforms are exact transforms without any loss of information and will therefore have zero residual errors. TIN or piecewise transforms have an exact fit at the control points and only contain errors inside the areas that are between the control points. 
+
+    >>> # polynomial errors
+    >>> for order in [1,2,3]:
+    ...     trans = tio.transforms.Polynomial(order=order)
+    ...     predicted,resids,toterr = tio.accuracy.model_accuracy(trans, impoints, geopoints, distance='geodesic')
+    ...     'RMSE: {:.9f} km'.format(toterr)
+    'RMSE: 611.209296883 km'
+    'RMSE: 436.849855103 km'
+    'RMSE: 348.122455875 km'
+
+    >>> # map projection error
+    >>> trans = tio.transforms.MapProjection(fromcrs, tocrs)
+    >>> projx,projy = trans.predict(*zip(*geopoints))
+    >>> projpoints = list(zip(projx,projy))
+    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, geopoints, projpoints, distance='eucledian')
+    >>> 'RMSE: {:.9f} m'.format(toterr)
+    'RMSE: 0.000000000 m'
+
+    >>> # TIN error
+    >>> trans = tio.transforms.TIN()
+    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, impoints, geopoints, distance='geodesic')
+    >>> 'RMSE: {:.9f} km'.format(toterr)
+    'RMSE: 0.000000000 km'
+
+Because of these problems with the traditional within-sample model residuals, a more comparable way of measuring accuracy is to instead use leave-one-out errors (also known as out-of-sample errors). The idea here is to calculate for each control point, where that point would be predicted if it was left out of the model. We activate this by setting `leave_one_out` to True, giving us a more comparable view of how the different models compare to each other: 
+
+    >>> # polynomial errors
+    >>> for order in [1,2,3]:
+    ...     trans = tio.transforms.Polynomial(order=order)
+    ...     predicted,resids,toterr = tio.accuracy.model_accuracy(trans, impoints, geopoints, leave_one_out=True, distance='geodesic')
+    ...     'RMSE: {:.9f} km'.format(toterr)
+    'RMSE: 729.482755488 km'
+    'RMSE: 684.036557435 km'
+    'RMSE: 975.841451696 km'
+
+    >>> # map projection error
+    >>> trans = tio.transforms.MapProjection(fromcrs, tocrs)
+    >>> projx,projy = trans.predict(*zip(*geopoints))
+    >>> projpoints = list(zip(projx,projy))
+    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, geopoints, projpoints, leave_one_out=True, distance='geodesic')
+    >>> 'RMSE: {:.9f} km'.format(toterr)
+    'RMSE: 0.000000000 km'
+
+    >>> # TIN error
+    >>> trans = tio.transforms.TIN()
+    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, impoints, geopoints, leave_one_out=True, distance='geodesic')
+    >>> 'RMSE: {:.9f} km'.format(toterr)
+    'RMSE: 688.720731518 km'
 
 
 ## Control point outliers

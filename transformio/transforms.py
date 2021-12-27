@@ -556,7 +556,8 @@ class MapProjection(object):
         return trans
 
     def fit(self, *args, **kwargs):
-        raise Exception('The map projection transform is an analytic transformation and does not need to be fit or estimated')
+        # Note: The map projection transform is an analytic transformation and does not need to be fit or estimated
+        return self
 
     def inverse(self):
         inv = MapProjection(self.tocrs, self.fromcrs)
@@ -628,7 +629,6 @@ class TIN(object):
         iny = np.append(iny, iny_corners)
         outx = np.append(outx, outx_corners)
         outy = np.append(outy, outy_corners)
-
 
         import shapely, shapely.geometry, shapely.ops
 
