@@ -252,6 +252,12 @@ def MAE(residuals):
     residuals = residuals[~invalid]
     return abs(residuals).sum() / float(residuals.shape[0])
 
+def MAX(residuals):
+    residuals = np.array(residuals)
+    invalid = np.isnan(residuals) | np.isinf(residuals)
+    residuals = residuals[~invalid]
+    return abs(residuals).max()
+
 
 
 

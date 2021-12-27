@@ -447,12 +447,16 @@ An important but often overlooked aspect of coordinate transformation such as ma
 
 To measure the model fit accuracy of a particular transform, we take the control points that we want to evaluate and measure the residual errors between the observed and predicted coordinates in either forward or backward direction. 
 
-For instance, let's say we have a set of control points and want to know how well an Affine transform would predict the forward geographic coordinates. If the geographic coordinates are given in latitude-longitude coordinates, the errors are measured using geodesic distances, and can be summarized using the commonly used root-mean-square-error (RMSE) metric:
+For instance, let's say we have a set of control points and want to know how well an Affine transform would predict the forward geographic coordinates. If the geographic coordinates are given in latitude-longitude coordinates, the errors are measured using geodesic distances, and can be summarized using one of several metrics:
 
     >>> trans = tio.transforms.Affine()
-    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, impoints, geopoints, distance='geodesic', metric='rmse')
-    >>> 'RMSE: {} km'.format(toterr)
+    >>> predicted,resids = tio.accuracy.residuals(trans, impoints, geopoints, distance='geodesic')
+    >>> 'RMSE: {} km'.format(tio.accuracy.RMSE(resids)) # root mean square error
     'RMSE: 611.209296883062 km'
+    >>> 'MAE: {} km'.format(tio.accuracy.MAE(resids)) # mean average error
+    'MAE: 476.2463332384581 km'
+    >>> 'MAX: {} km'.format(tio.accuracy.MAX(resids)) # maximum error
+    'MAX: 1972.5992842092362 km'
     >>> for obs,pred,resid in zip(geopoints,predicted,resids):
     ...     'Observed {}; Predicted {}; Residual {} km'.format(obs,pred,resid)
     'Observed (101.621839, 56.161959); Predicted (98.6393264938272, 55.091630511199774); Residual 221.69318994970638 km'
@@ -480,10 +484,13 @@ For instance, let's say we have a set of control points and want to know how wel
 
 We can also do this in the backward direction and calculate the pixel sampling errors for each control point. To do so, we try to predict in the opposite direction, i.e. predicting the input pixel coordinates based on the output geographic coordinates. The errors are then measured as the eucliedian distance between the original and predicted input pixel coordinates: 
 
-    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, geopoints, impoints, distance='eucledian', metric='rmse')
-    >>> 'RMSE: {} pixels'.format(toterr)
+    >>> predicted,resids = tio.accuracy.residuals(trans, geopoints, impoints, distance='eucledian')
+    >>> 'RMSE: {} pixels'.format(tio.accuracy.RMSE(resids))
     'RMSE: 102.14884780375236 pixels'
-
+    >>> 'MAE: {} pixels'.format(tio.accuracy.MAE(resids))
+    'MAE: 83.97566786748722 pixels'
+    >>> 'MAX: {} pixels'.format(tio.accuracy.MAX(resids))
+    'MAX: 282.60313208231486 pixels'
     >>> for obs,pred,resid in zip(impoints,predicted,resids):
     ...     'Observed {}; Predicted {}; Residual {} pixels'.format(obs,pred,resid)
     'Observed (532, 64); Predicted (591.4781711914964, 77.04904444945544); Residual 60.89277797349051 pixels'
@@ -516,8 +523,8 @@ An important aspect to note about within-sample residuals and accuracy metrics i
     >>> # polynomial errors
     >>> for order in [1,2,3]:
     ...     trans = tio.transforms.Polynomial(order=order)
-    ...     predicted,resids,toterr = tio.accuracy.model_accuracy(trans, impoints, geopoints, distance='geodesic')
-    ...     'RMSE: {:.9f} km'.format(toterr)
+    ...     predicted,resids = tio.accuracy.residuals(trans, impoints, geopoints, distance='geodesic')
+    ...     'RMSE: {:.9f} km'.format(tio.accuracy.RMSE(resids))
     'RMSE: 611.209296883 km'
     'RMSE: 436.849855103 km'
     'RMSE: 348.122455875 km'
@@ -526,23 +533,23 @@ An important aspect to note about within-sample residuals and accuracy metrics i
     >>> trans = tio.transforms.MapProjection(fromcrs, tocrs)
     >>> projx,projy = trans.predict(*zip(*geopoints))
     >>> projpoints = list(zip(projx,projy))
-    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, geopoints, projpoints, distance='eucledian')
-    >>> 'RMSE: {:.9f} m'.format(toterr)
+    >>> predicted,resids = tio.accuracy.residuals(trans, geopoints, projpoints, distance='eucledian')
+    >>> 'RMSE: {:.9f} m'.format(tio.accuracy.RMSE(resids))
     'RMSE: 0.000000000 m'
 
     >>> # TIN error
     >>> trans = tio.transforms.TIN()
-    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, impoints, geopoints, distance='geodesic')
-    >>> 'RMSE: {:.9f} km'.format(toterr)
+    >>> predicted,resids = tio.accuracy.residuals(trans, impoints, geopoints, distance='geodesic')
+    >>> 'RMSE: {:.9f} km'.format(tio.accuracy.RMSE(resids))
     'RMSE: 0.000000000 km'
 
-Because of these problems with the traditional within-sample model residuals, a more comparable way of measuring accuracy is to instead use leave-one-out errors (also known as out-of-sample errors). The idea here is to calculate for each control point, where that point would be predicted if it was left out of the model. We activate this by setting `leave_one_out` to True, giving us a more comparable view of how the different models compare to each other: 
+Because of these problems with the traditional within-sample model residuals, a more comparable way of measuring accuracy is to instead use leave-one-out errors (also known as out-of-sample errors). The idea here is to calculate for each control point, where that point would be predicted if it was left out of the model. We do this by using the `loo_residuals` function, giving us a more comparable view of how the different models compare to each other: 
 
     >>> # polynomial errors
     >>> for order in [1,2,3]:
     ...     trans = tio.transforms.Polynomial(order=order)
-    ...     predicted,resids,toterr = tio.accuracy.model_accuracy(trans, impoints, geopoints, leave_one_out=True, distance='geodesic')
-    ...     'RMSE: {:.9f} km'.format(toterr)
+    ...     predicted,resids = tio.accuracy.loo_residuals(trans, impoints, geopoints, distance='geodesic')
+    ...     'RMSE: {:.9f} km'.format(tio.accuracy.RMSE(resids))
     'RMSE: 729.482755488 km'
     'RMSE: 684.036557435 km'
     'RMSE: 975.841451696 km'
@@ -551,14 +558,14 @@ Because of these problems with the traditional within-sample model residuals, a 
     >>> trans = tio.transforms.MapProjection(fromcrs, tocrs)
     >>> projx,projy = trans.predict(*zip(*geopoints))
     >>> projpoints = list(zip(projx,projy))
-    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, geopoints, projpoints, leave_one_out=True, distance='geodesic')
-    >>> 'RMSE: {:.9f} km'.format(toterr)
+    >>> predicted,resids = tio.accuracy.loo_residuals(trans, geopoints, projpoints, distance='eucledian')
+    >>> 'RMSE: {:.9f} km'.format(tio.accuracy.RMSE(resids))
     'RMSE: 0.000000000 km'
 
     >>> # TIN error
     >>> trans = tio.transforms.TIN()
-    >>> predicted,resids,toterr = tio.accuracy.model_accuracy(trans, impoints, geopoints, leave_one_out=True, distance='geodesic')
-    >>> 'RMSE: {:.9f} km'.format(toterr)
+    >>> predicted,resids = tio.accuracy.loo_residuals(trans, impoints, geopoints, distance='geodesic')
+    >>> 'RMSE: {:.9f} km'.format(tio.accuracy.RMSE(resids))
     'RMSE: 688.720731518 km'
 
 
