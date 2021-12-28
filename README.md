@@ -581,18 +581,75 @@ The ground control points used to fit transformation models are often noisy and 
     >>> 'RMSE: {:.9f} km'.format(tio.accuracy.RMSE(resids))
     'RMSE: 611.209296883 km'
 
+    >>> # warp the image
+    >>> trans.fit(*zip(*impoints), *zip(*geopoints))
+    >>> warped,affine = tio.imwarp.warp(im, trans)
+    >>> bounds = tio.imwarp.imbounds(*warped.size, trans)
+
+    >>> # visualize on the map
+    >>> draw = warped.copy()
+    >>> tio.utils.draw_geojson({'type':'MultiPoint', 'coordinates':predicted},
+    ...                          draw, bounds, fillcolor="red", fillsize=25)
+    >>> tio.utils.draw_geojson({'type':'MultiPoint', 'coordinates':geopoints},
+    ...                          draw, bounds, fillcolor="green", fillsize=25)
+    >>> draw.save('tests/output/doctest-outliers-all.png')
+
+![Outliers all](/tests/output/doctest-outliers-all.png)
+
 To improve this accuracy we can compare the different control points and drop the one whose exclusion best improves the accuracy metric. We can do this continually until the model stops improving beyond a given threshold: 
 
     >>> # continually drop the control point with the worst performing model
-    >>> _trans, _impoints, _geopoints, _predicted, _resids, _err = tio.accuracy.auto_drop_models(trans, impoints, geopoints, distance='geodesic', improvement_ratio=0.10)
+    >>> _trans, _impoints, _geopoints, _predicted, _resids, _err = tio.accuracy.auto_drop_models(trans, impoints, geopoints, distance='geodesic', metric='rmse', improvement_ratio=0.10)
     >>> 'Control points: {}'.format(len(_impoints))
     'Control points: 19'
-    >>> 'RMSE: {:.9f} km'.format(tio.accuracy.RMSE(_resids))
+    >>> 'RMSE: {:.9f} km'.format(_err)
     'RMSE: 333.882194848 km'
+
+    >>> # warp the image
+    >>> _trans.fit(*zip(*_impoints), *zip(*_geopoints))
+    >>> warped,affine = tio.imwarp.warp(im, _trans)
+    >>> bounds = tio.imwarp.imbounds(*warped.size, _trans)
+
+    >>> # visualize on the map
+    >>> draw = warped.copy()
+    >>> tio.utils.draw_geojson({'type':'MultiPoint', 'coordinates':_predicted},
+    ...                          draw, bounds, fillcolor="red", fillsize=25)
+    >>> tio.utils.draw_geojson({'type':'MultiPoint', 'coordinates':_geopoints},
+    ...                          draw, bounds, fillcolor="green", fillsize=25)
+    >>> draw.save('tests/output/doctest-outliers-dropped.png')
+
+![Outliers dropped](/tests/output/doctest-outliers-dropped.png)
 
 
 ## Model selection
 
-In addition to evaluating individual models, transformio provides several algorithms for automatically comparing and selecting the most optimal transformation model for a particular use-case. 
+In addition to evaluating individual models, transformio provides functionality for automatically comparing and selecting the most accurate transformation model with the optimal set of control points for each model: 
 
-...
+    >>> # auto choose from a selection of models
+    >>> trytransforms = [tio.transforms.Polynomial(order=1),
+    ...                 tio.transforms.Polynomial(order=2),
+    ...                 tio.transforms.Polynomial(order=3),
+    ...                 tio.transforms.TIN()]
+    >>> _trans, _impoints, _geopoints, _predicted, _resids, _err = tio.accuracy.auto_choose_model(impoints, geopoints, trytransforms, refine_outliers=True, distance='geodesic', metric='rmse')
+    >>> _trans
+    Polynomial Transform(order=2, estimated=True)
+    >>> 'Control points: {}'.format(len(_impoints))
+    'Control points: 18'
+    >>> 'RMSE: {:.9f} km'.format(_err)
+    'RMSE: 278.617602953 km'
+
+    >>> # warp the image
+    >>> _trans.fit(*zip(*_impoints), *zip(*_geopoints))
+    >>> warped,affine = tio.imwarp.warp(im, _trans)
+    >>> bounds = tio.imwarp.imbounds(*warped.size, _trans)
+
+    >>> # visualize on the map
+    >>> draw = warped.copy()
+    >>> tio.utils.draw_geojson({'type':'MultiPoint', 'coordinates':_predicted},
+    ...                          draw, bounds, fillcolor="red", fillsize=25)
+    >>> tio.utils.draw_geojson({'type':'MultiPoint', 'coordinates':_geopoints},
+    ...                          draw, bounds, fillcolor="green", fillsize=25)
+    >>> draw.save('tests/output/doctest-automodel.png')
+    
+![Outliers dropped](/tests/output/doctest-automodel.png)
+

@@ -103,7 +103,7 @@ def model_accuracy(trans, inpoints, outpoints, leave_one_out=False, distance='eu
 
 # auto refinement
 
-def drop_worst_model(trans, inpoints, outpoints, leave_one_out=False, distance=None, metric='rmse'):
+def drop_worst_model(trans, inpoints, outpoints, leave_one_out=False, distance='euclidean', metric='rmse'):
     inpoints = list(inpoints)
     outpoints = list(outpoints)
     trans = trans.copy()
@@ -132,7 +132,7 @@ def drop_worst_model(trans, inpoints, outpoints, leave_one_out=False, distance=N
     
     return trans, inpoints, outpoints, predicted, resids, err
 
-def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoints=None, leave_one_out=False, distance=None, metric='rmse', verbose=False):
+def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoints=None, leave_one_out=False, distance='euclidean', metric='rmse', verbose=False):
     _inpoints = list(inpoints)
     _outpoints = list(outpoints)
     trans = trans.copy()
@@ -195,13 +195,13 @@ def auto_choose_model(inpoints, outpoints, transforms, refine_outliers=True, **k
             #err,resids = model_accuracy(trans, inpoints, outpoints, leave_one_out=True, **kwargs)
             #res = trans, inpoints, outpoints, err, resids
         else:
-            err,resids = model_accuracy(trans, inpoints, outpoints, leave_one_out=True, **kwargs)
-            res = trans, inpoints, outpoints, err, resids
+            predicted,resids,err = model_accuracy(trans, inpoints, outpoints, leave_one_out=True, **kwargs)
+            res = trans, inpoints, outpoints, predicted, resids, err
         results.append(res)
 
-    best = sorted(results, key=lambda res: res[-2])
-    trans, inpoints, outpoints, err, resids = best[0]
-    return trans, inpoints, outpoints, err, resids
+    best = sorted(results, key=lambda res: res[-1])
+    trans, inpoints, outpoints, predicted, resids, err = best[0]
+    return trans, inpoints, outpoints, predicted, resids, err
 
 
 ##def drop_worst_residual():
