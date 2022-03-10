@@ -623,7 +623,7 @@ To improve this accuracy we can compare the different control points and drop th
 
 ## Model selection
 
-In addition to evaluating individual models, transformio provides functionality for automatically comparing and selecting the most accurate transformation model with the optimal set of control points for each model: 
+In addition to evaluating individual models, transformio provides functionality for automatically finding the optimal set of control points for multiple transformation models, and then selecting the most accurate model based on leave-one-out residuals: 
 
     >>> # auto choose from a selection of models
     >>> trytransforms = [tio.transforms.Polynomial(order=1),

@@ -85,20 +85,15 @@ def imbounds(width, height, transform):
 
     return xmin,ymin,xmax,ymax
 
-def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=None):
+def warp(im, transform, resample='nearest', size=None, bounds=None, maxdim=None, fromcrs=None, tocrs=None):
     # transform can be a single transform instance, a chain transform, or a list of transforms.
     # check if im is url
+    # TODO: Probably drop maxdim arg... 
     if isinstance(im, str) and im.startswith('http'):
         #print('getting image from url')
         url = im
         fobj = io.BytesIO(urllib.request.urlopen(url).read())
         im = PIL.Image.open(fobj)
-
-
-
-    # ensure correct im mode
-    if not im.mode == 'RGBA':
-        im = im.convert('RGBA')
 
 
 
@@ -144,17 +139,29 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
     # get output bounds
     #print('calculating coordinate bounds')
     imw,imh = im.size
-    xmin,ymin,xmax,ymax = imbounds(imw, imh, chain)
+    if bounds:
+        # user defined bounds
+        xmin,ymin,xmax,ymax = bounds
+    else:
+        # calc bounds by forward projecting image pixels
+        xmin,ymin,xmax,ymax = imbounds(imw, imh, chain)
     #print(xmin,ymin,xmax,ymax)
 
     
 
-    # calc diagonal dist and output dims
-    # TODO: allow user-specified output dimensions
-    dx,dy = xmax-xmin, ymax-ymin
-    diag = math.hypot(dx, dy)
-    xyscale = diag / float(math.hypot(imw, imh))
-    w,h = int(dx / xyscale), int(dy / xyscale)
+    # get output dims
+    if size:
+        # user-specified output dimensions
+        dx,dy = xmax-xmin, ymax-ymin
+        w,h = size
+        xscale = dx / w
+        yscale = dy / h
+    else:
+        # calc output size to approx match input size (based on diagonal)
+        dx,dy = xmax-xmin, ymax-ymin
+        diag = math.hypot(dx, dy)
+        xscale = yscale = diag / float(math.hypot(imw, imh))
+        w,h = int(dx / xscale), int(dy / yscale)
 
 ##    downsize = 10
 ##    w = int(w/float(downsize))
@@ -162,9 +169,8 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
 ##    xscale = dx / float(w)
 ##    yscale = dy / float(h)
     
-    # set affine
-    xoff,yoff = xmin,ymin
-    xscale = yscale = xyscale 
+    # set output affine
+    xoff,yoff = xmin,ymin 
     if True: #predy[0] > predy[-1]:    # WARNING: HACKY ASSUMES FLIPPED Y AXIS FOR NOW...
         yoff = ymax
         yscale *= -1
@@ -217,8 +223,32 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
         invchain = chain.inverse()
         #print('inverse chain',invchain)
         backpredx,backpredy = invchain.predict(xs, ys)
-        backpred = np.column_stack((backpredx, backpredy))
-        backpred = backpred.reshape((h,w,2))
+        #info = []
+        #info.append(('target affine', affine))
+        #info.append(('target bounds', bounds))
+        #info.append(('backpred bounds', backpredx.min(), backpredy.min(), backpredx.max(), backpredy.max()))
+
+        # cropping only the relevant parts of the image
+        if False:
+            # TODO: important, but doesn't quite work yet... 
+            backpred_xmin, backpred_ymin = backpredx.min(), backpredy.min()
+            backpred_xmax, backpred_ymax = backpredx.max(), backpredy.max()
+            # NOTE: removing the capping on line below fixes the problem, but introduces black background
+            cropbox = max(backpred_xmin, 0), max(backpred_ymin, 0), min(backpred_xmax, imw-1), min(backpred_ymax, imh-1)
+            cropbox = tuple([int(round(v)) for v in cropbox])
+            #info.append(('cropping to', cropbox))
+            im = im.crop(cropbox)
+            # update input image size and offset the backpred coords
+            imw,imh = im.size
+            #info.append(('imdims',imw,imh))
+            backpredx -= backpred_xmin
+            backpredy -= backpred_ymin
+            #info.append(('backpred bounds', backpredx.min(), backpredy.min(), backpredx.max(), backpredy.max()))
+            #info.append(im)
+
+        # ensure correct im mode
+        if not im.mode == 'RGBA':
+            im = im.convert('RGBA')
         
         #print('writing to output')
         # slow, can prob optimize even more by using direct numpy indexing
@@ -240,6 +270,8 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
         # faster numpy version
         inarr = np.array(im)
         outarr = np.zeros((h, w, 4), dtype=np.uint8)
+        backpred = np.column_stack((backpredx, backpredy))
+        backpred = backpred.reshape((h,w,2))
         backpred_cols = backpred[:,:,0]
         backpred_rows = backpred[:,:,1]
         # valid
@@ -251,6 +283,7 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
         backpred_inbounds = (backpred_cols >= 0) & (backpred_cols < imw) & (backpred_rows >= 0) & (backpred_rows < imh)
         # do the sampling
         mask = (backpred_valid & backpred_inbounds)
+        #info.append(('final backpred bounds', backpred_cols[mask].min(), backpred_rows[mask].min(), backpred_cols[mask].max(), backpred_rows[mask].max()))
         outarr[mask] = inarr[backpred_rows[mask], backpred_cols[mask], :]
 
     else:
@@ -267,6 +300,8 @@ def warp(im, transform, resample='nearest', maxdim=None, fromcrs=None, tocrs=Non
 ##    x,y = forward.predict([w], [h])
 ##    x2,y2 = float(x[0]), float(y[0])
 ##    result['bbox'] = [x1,y1,x2,y2]
+
+    #print('\n'.join([str(e) for e in info]))
 
     out = PIL.Image.fromarray(outarr)
     return out, affine
