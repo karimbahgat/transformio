@@ -214,12 +214,15 @@ def warp(im, transform, resample='nearest', size=None, bounds=None, maxdim=None,
 ##        backpredx,backpredy = invtransform.predict(xs, ys)
 ##        backpred = np.column_stack((backpredx, backpredy))
 ##        backpred = backpred.reshape((h,w,2))
+        # define output pixels
         cols = np.linspace(0, w-1, w)
         rows = np.linspace(0, h-1, h)
         cols,rows = np.meshgrid(cols, rows)
         cols,rows = cols.flatten(), rows.flatten()
+        # convert to output coordinates
         xs = xoff + (cols * xscale)
         ys = yoff + (rows * yscale)
+        # backwards predict output coords to original input pixels
         invchain = chain.inverse()
         #print('inverse chain',invchain)
         backpredx,backpredy = invchain.predict(xs, ys)
@@ -229,11 +232,10 @@ def warp(im, transform, resample='nearest', size=None, bounds=None, maxdim=None,
         #info.append(('backpred bounds', backpredx.min(), backpredy.min(), backpredx.max(), backpredy.max()))
 
         # cropping only the relevant parts of the image
-        if False:
-            # TODO: important, but doesn't quite work yet... 
-            backpred_xmin, backpred_ymin = backpredx.min(), backpredy.min()
-            backpred_xmax, backpred_ymax = backpredx.max(), backpredy.max()
-            # NOTE: removing the capping on line below fixes the problem, but introduces black background
+        if bounds:
+            xvalid, yvalid = ~np.isnan(backpredx), ~np.isnan(backpredy)
+            backpred_xmin, backpred_ymin = backpredx[xvalid].min(), backpredy[yvalid].min()
+            backpred_xmax, backpred_ymax = backpredx[xvalid].max(), backpredy[yvalid].max()
             cropbox = max(backpred_xmin, 0), max(backpred_ymin, 0), min(backpred_xmax, imw-1), min(backpred_ymax, imh-1)
             cropbox = tuple([int(round(v)) for v in cropbox])
             #info.append(('cropping to', cropbox))
@@ -241,14 +243,12 @@ def warp(im, transform, resample='nearest', size=None, bounds=None, maxdim=None,
             # update input image size and offset the backpred coords
             imw,imh = im.size
             #info.append(('imdims',imw,imh))
-            backpredx -= backpred_xmin
-            backpredy -= backpred_ymin
+            if backpred_xmin > 0:
+                backpredx -= backpred_xmin
+            if backpred_ymin > 0:
+                backpredy -= backpred_ymin
             #info.append(('backpred bounds', backpredx.min(), backpredy.min(), backpredx.max(), backpredy.max()))
             #info.append(im)
-
-        # ensure correct im mode
-        if not im.mode == 'RGBA':
-            im = im.convert('RGBA')
         
         #print('writing to output')
         # slow, can prob optimize even more by using direct numpy indexing
@@ -268,6 +268,13 @@ def warp(im, transform, resample='nearest', size=None, bounds=None, maxdim=None,
 ##                    outarr[row,col,:] = rgba
 
         # faster numpy version
+        if not im.mode.startswith('RGB'):
+            # special color formats must be converted to rgb
+            if im.mode.endswith('A'):
+                # only convert to alpha if necessary
+                im = im.convert('RGBA')
+            else:
+                im = im.convert('RGB')
         inarr = np.array(im)
         outarr = np.zeros((h, w, 4), dtype=np.uint8)
         backpred = np.column_stack((backpredx, backpredy))
@@ -284,7 +291,74 @@ def warp(im, transform, resample='nearest', size=None, bounds=None, maxdim=None,
         # do the sampling
         mask = (backpred_valid & backpred_inbounds)
         #info.append(('final backpred bounds', backpred_cols[mask].min(), backpred_rows[mask].min(), backpred_cols[mask].max(), backpred_rows[mask].max()))
-        outarr[mask] = inarr[backpred_rows[mask], backpred_cols[mask], :]
+        if len(im.mode) == 4:
+            # inarr and outarr both have rgba
+            outarr[mask] = inarr[backpred_rows[mask], backpred_cols[mask], :]
+        elif len(im.mode) == 3:
+            # inarr only has rgb
+            outarr[mask,:3] = inarr[backpred_rows[mask], backpred_cols[mask], :] # set rgb only
+            outarr[mask,-1] = 255 # set alpha to visible
+        else:
+            raise Exception('Unexpected image mode: {}'.format(im.mode))
+
+        # memory friendly numpy version
+        # NOT FINISHED YET... 
+        '''
+        # figure out roughly how many chunks of outputs 
+        # in order to get 256x256 chunks in input
+        backpred_xmin, backpred_ymin = backpredx.min(), backpredy.min()
+        backpred_xmax, backpred_ymax = backpredx.max(), backpredy.max()
+        backpred_width = backpred_xmax-backpred_xmin
+        backpred_height = backpred_ymax-backpred_ymin
+        xsteps = backpred_width / 256 # how many horizontal 256 blocks fits in input
+        ysteps = backpred_height / 256 # how many vertical 256 blocks fits in input
+        xstepsize,ystepsize = int(w // xsteps), int(h // ysteps) # get output tilesize by dividing by that many blocks
+        print('output stepsize', xstepsize, ystepsize)
+
+        # iterate each chunk of output (roughly equivalent of 256x256 in input)
+        outarr = np.zeros((h, w, 4), dtype=np.uint8)
+        backpred = np.column_stack((backpredx, backpredy))
+        backpred = backpred.reshape((h,w,2))
+        for tiley in range(0, h, ystepsize):
+            tiley2 = min(tiley+ystepsize-1, h-1)
+            for tilex in range(0, w, xstepsize):
+                tilex2 = min(tilex+xstepsize-1, w-1)
+                tilew,tileh = tilex2-tilex, tiley2-tiley
+                print('tilebox',tilex,tilex2,tiley,tiley2)
+                print('tilesize',tilew,tileh)
+                # get predicted input coords for current output tile
+                _backpred = backpred[tiley:tiley2, tilex:tilex2]
+                backpred_cols = _backpred[:,:,0]
+                backpred_rows = _backpred[:,:,1]
+                # valid
+                backpred_valid = ~(np.isnan(backpred_cols) | np.isnan(backpred_rows))
+                # nearest pixel rounding
+                backpred_cols = np.around(backpred_cols, 0).astype(int)
+                backpred_rows = np.around(backpred_rows, 0).astype(int)
+                # define image bounds
+                backpred_inbounds = (backpred_cols >= 0) & (backpred_cols < w) & (backpred_rows >= 0) & (backpred_rows < h)
+                # crop the image
+                backpred_colmin, backpred_rowmin = backpred_cols.min(), backpred_rows.min()
+                backpred_colmax, backpred_rowmax = backpred_cols.max(), backpred_rows.max()
+                cropbox = backpred_colmin, backpred_rowmin, backpred_colmax, backpred_rowmax
+                print('cropbox',cropbox)
+                im = im.crop(cropbox)
+                print('cropped',im)
+                # offset so indices point to chunk indices
+                backpred_cols -= backpred_colmin
+                backpred_rows -= backpred_rowmin
+                # convert to rgba
+                if not im.mode == 'RGBA':
+                    im = im.convert('RGBA')
+                # do the sampling
+                inarr = np.array(im)
+                mask = (backpred_valid & backpred_inbounds)
+                print('mask',mask.shape)
+                print('outarr',outarr[tiley:tiley2, tilex:tilex2].shape)
+                print('inarr',inarr.shape)
+                #info.append(('final backpred bounds', backpred_cols[mask].min(), backpred_rows[mask].min(), backpred_cols[mask].max(), backpred_rows[mask].max()))
+                outarr[tiley:tiley2, tilex:tilex2][mask] = inarr[backpred_rows[mask], backpred_cols[mask], :]
+        '''
 
     else:
         raise ValueError('Unknown resample arg: {}'.format(resample))

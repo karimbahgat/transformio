@@ -260,7 +260,14 @@ That's all we need. Now just call on the `warp` function along with a list of sp
 
 ![Expected image](/tests/output/doctest-raster-reprojection.png)
 
-This returns a numpy image array containing the warped image data, and the affine transform parameters defining the image's coordinate system. 
+This returns a PIL image containing the image contents after warping it into the output coordinate system, and the affine transform parameters defining this coordinate system. The output image size is automatically determined to approximately match the input image size, but can also be set manually using the `size` arg. Finally, you can also define which area in the output coordinate system to include in the output image using the `bounds` arg, which can be useful for tiled reprojection. For instance:
+
+    >>> # warp the image
+    >>> warped,affine = tio.imwarp.warp(im, [img2geo,geo2proj], bounds=[0,0,18038694,9020047], size=(256,256))
+    >>> warped.save('tests/output/doctest-raster-reprojection-tile.png')
+
+![Expected image](/tests/output/doctest-raster-reprojection-tile.png)
+
 
 
 ### *Map georeferencing/registration*
