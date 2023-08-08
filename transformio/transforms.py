@@ -34,6 +34,17 @@ def from_json(js):
     trans = cls.from_json(js)
     return trans
 
+
+class InsufficientTransformPoints(Exception):
+    def __init__(self, trans, x, y):
+        self.trans = trans
+        self.x = x
+        self.y = y
+
+    def __repr__(self):
+        return 'InsufficientTransformPoints: Cannot fit a {} transform with only {} points, at least {} is required'.format(self.trans.__name__, len(self.x), self.trans.minpoints)
+
+
 class Chain(object):
 
     def __init__(self, transforms=None):
@@ -163,7 +174,11 @@ class Polynomial(object):
                 self.order = 1
             # update minpoints
             self.minpoints = {1:3, 2:10, 3:20}[self.order] 
-        
+
+        # enforce minpoints
+        if len(inx) < self.minpoints:
+            raise InsufficientTransformPoints(self, inx, iny)
+
         if self.order == 1:
             # terms
             x = inx
@@ -441,6 +456,10 @@ class Affine(object):
         return trans
 
     def fit(self, inx, iny, outx, outy, invert=False): #, exact=False):
+        # enforce minpoints
+        if len(inx) < self.minpoints:
+            raise InsufficientTransformPoints(self, inx, iny)
+
         # to arrays
         inx = np.array(inx)
         iny = np.array(iny)
@@ -608,6 +627,10 @@ class TIN(object):
         return trans
 
     def fit(self, inx, iny, outx, outy, invert=False):
+        # enforce minpoints
+        if len(inx) < self.minpoints:
+            raise InsufficientTransformPoints(self, inx, iny)
+
         # to arrays
         inx = np.array(inx)
         iny = np.array(iny)

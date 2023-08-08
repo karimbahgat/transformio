@@ -2,6 +2,8 @@
 import numpy as np
 import math
 
+from .transforms import InsufficientTransformPoints
+
 # residuals
 
 def distances(obsx, obsy, predx, predy, metric='euclidean'):
@@ -59,6 +61,7 @@ def residuals(transform, inpoints, outpoints, distance='euclidean'):
 def loo_residuals(transform, inpoints, outpoints, distance='euclidean'):
     # leave-one-out bootstrap method (out of sample)
     # residual is difference bw predicted point when refitting the model without each point
+    # NOTE: raises InsufficientTransformPoints if dropping a point is below the minpoints for the transform
     predpoints = []
     for inpoint,outpoint in zip(inpoints, outpoints):
         # remove gcp and reestimate transform
@@ -104,6 +107,8 @@ def model_accuracy(trans, inpoints, outpoints, leave_one_out=False, distance='eu
 # auto refinement
 
 def drop_worst_model(trans, inpoints, outpoints, leave_one_out=False, distance='euclidean', metric='rmse'):
+    # NOTE: raises InsufficientTransformPoints if dropping a point is below the minpoints for the transform
+
     inpoints = list(inpoints)
     outpoints = list(outpoints)
     trans = trans.copy()
@@ -133,6 +138,9 @@ def drop_worst_model(trans, inpoints, outpoints, leave_one_out=False, distance='
     return trans, inpoints, outpoints, predicted, resids, err
 
 def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoints=None, leave_one_out=False, distance='euclidean', metric='rmse', verbose=False):
+    # NOTE: drops one point at a time to refine the model (but not below the minpoints of the transform)
+    # NOTE: raises InsufficientTransformPoints if the initial transform doesn't have enough points
+
     _inpoints = list(inpoints)
     _outpoints = list(outpoints)
     trans = trans.copy()
@@ -154,8 +162,13 @@ def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoin
     while len(_inpoints) > minpoints: #for _ in range(len(inpoints)-trans.minpoints):
         if verbose:
             print(len(_inpoints))
-        _trans,_inpoints,_outpoints,_predicted,_resids,_err = drop_worst_model(trans, _inpoints, _outpoints,
-                                                                                leave_one_out, distance, metric)
+
+        try:
+            _trans,_inpoints,_outpoints,_predicted,_resids,_err = drop_worst_model(trans, _inpoints, _outpoints,
+                                                                                    leave_one_out, distance, metric)
+        except InsufficientTransformPoints:
+            break
+
         if verbose:
             print('new error',_err)
         
@@ -180,6 +193,7 @@ def auto_drop_models(trans, inpoints, outpoints, improvement_ratio=0.10, minpoin
 
 def auto_choose_model(inpoints, outpoints, transforms, refine_outliers=True, **kwargs):
     # compare and choose optimal among a set of transforms
+    # NOTE: if none of the models could be estimated, returns None
     inpoints = list(inpoints)
     outpoints = list(outpoints)
 
@@ -187,18 +201,28 @@ def auto_choose_model(inpoints, outpoints, transforms, refine_outliers=True, **k
     for trans in transforms:
         #print trans
         # note that leave_one_out is hardcoded in order to compare across models
-        if refine_outliers:
-            # Drop outliers based on LOO resids (slower)
-            res = auto_drop_models(trans, inpoints, outpoints, leave_one_out=True, **kwargs)
-            # Drop outliers based on normal resids (much faster)
-            #trans, inpoints, outpoints, err, resids = auto_drop_models(trans, inpoints, outpoints, leave_one_out=False, **kwargs)
-            #err,resids = model_accuracy(trans, inpoints, outpoints, leave_one_out=True, **kwargs)
-            #res = trans, inpoints, outpoints, err, resids
-        else:
-            predicted,resids,err = model_accuracy(trans, inpoints, outpoints, leave_one_out=True, **kwargs)
-            res = trans, inpoints, outpoints, predicted, resids, err
-        results.append(res)
+        try:
+            if refine_outliers:
+                # Drop outliers based on LOO resids (slower)
+                res = auto_drop_models(trans, inpoints, outpoints, leave_one_out=True, **kwargs)
+                # Drop outliers based on normal resids (much faster)
+                #trans, inpoints, outpoints, err, resids = auto_drop_models(trans, inpoints, outpoints, leave_one_out=False, **kwargs)
+                #err,resids = model_accuracy(trans, inpoints, outpoints, leave_one_out=True, **kwargs)
+                #res = trans, inpoints, outpoints, err, resids
+            else:
+                predicted,resids,err = model_accuracy(trans, inpoints, outpoints, leave_one_out=True, **kwargs)
+                res = trans, inpoints, outpoints, predicted, resids, err
 
+            results.append(res)
+
+        except InsufficientTransformPoints:
+            continue
+
+    # no models could be fitted
+    if not results:
+        return None
+
+    # return best model
     best = sorted(results, key=lambda res: res[-1])
     trans, inpoints, outpoints, predicted, resids, err = best[0]
     return trans, inpoints, outpoints, predicted, resids, err

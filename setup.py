@@ -12,6 +12,7 @@ setup(	long_description="Transformio creates, applies, and evaluates coordinate 
     install_requires=[
 		'numpy==1.*'
 	],
+	url='https://github.com/karimbahgat/transformio',
 	classifiers=['License :: OSI Approved', 'Programming Language :: Python', 'Development Status :: 4 - Beta', 'Intended Audience :: Developers', 'Intended Audience :: Science/Research', 'Intended Audience :: End Users/Desktop'],
 	description="""Transformio creates, applies, and evaluates coordinate transformations for vector and raster geospatial data.""",
 	)
